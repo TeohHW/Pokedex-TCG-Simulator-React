@@ -1,4 +1,5 @@
 # Pokemon TCG Simulator
-- Personal Project, not intended for any other purposes
-- Framework/Tools: React, Vite
-- AI Tools used: Codex
+- This is a personal project not intended for any other purposes
+- Demo: https://pokemon-tcg-simulator-react.vercel.app/
+#
+  Any assets used in this repository belong to their respective owners
