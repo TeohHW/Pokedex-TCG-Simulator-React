@@ -6,12 +6,30 @@ const CARD_FLIP_DELAY = 300;
 const PACK_PREP_DELAY = 900;
 const TEN_PACK_FLIP_DELAY = CARD_FLIP_DELAY / 10;
 const CARD_BACK_IMAGE = 'https://images.pokemontcg.io/unbroken-bond/back.png';
+const REPOSITORY_URL = 'https://github.com/TeohHW/Pokemon-TCG-Simulator-React';
 const POKEBALL_LOGO = new URL(
   '../pokemon-tcg-data-master/images/Poké_Ball_icon.png',
   import.meta.url,
 ).href;
 
 const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
+
+const getCardFaceImage = (card) => card.largeImage || card.image;
+
+const getCardFallbackImage = (card) =>
+  card.largeImage && card.image !== card.largeImage ? card.image : '';
+
+const handleCardImageError = (event) => {
+  const fallbackSrc = event.currentTarget.dataset.fallbackSrc;
+
+  if (fallbackSrc) {
+    event.currentTarget.src = fallbackSrc;
+    event.currentTarget.removeAttribute('data-fallback-src');
+    return;
+  }
+
+  event.currentTarget.src = 'https://images.pokemontcg.io/xy12/20.png';
+};
 
 const loadCollection = () => {
   try {
@@ -74,6 +92,7 @@ function App() {
   const [isPreparingPack, setIsPreparingPack] = useState(false);
   const [isAutoRevealing, setIsAutoRevealing] = useState(false);
   const [selectedCard, setSelectedCard] = useState(null);
+  const [showClearBinderDialog, setShowClearBinderDialog] = useState(false);
   const [collection, setCollection] = useState(loadCollection);
   const [loading, setLoading] = useState(true);
   const revealTimersRef = useRef([]);
@@ -247,10 +266,13 @@ function App() {
   };
 
   const clearBinder = () => {
-    if (window.confirm('Clear your entire binder collection?')) {
-      setCollection({});
-      localStorage.removeItem(COLLECTION_STORAGE_KEY);
-    }
+    setShowClearBinderDialog(true);
+  };
+
+  const confirmClearBinder = () => {
+    setCollection({});
+    localStorage.removeItem(COLLECTION_STORAGE_KEY);
+    setShowClearBinderDialog(false);
   };
 
   const expansionEntries = useMemo(
@@ -329,6 +351,17 @@ function App() {
           <img src={POKEBALL_LOGO} alt="" aria-hidden="true" />
           <h1>Pokémon TCG Simulator</h1>
         </div>
+        <a
+          className="repo-link"
+          href={REPOSITORY_URL}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open GitHub repository"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.86c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+          </svg>
+        </a>
       </header>
 
       <div className="control-panel">
@@ -407,12 +440,12 @@ function App() {
             disabled={loading || !selectedSetIsPlayable}
             className="btn btn-primary"
           >
-            {loading ? 'Loading Database...' : 'Generate New Booster Pack'}
+            {loading ? 'Loading Database...' : 'Open 1 Pack'}
           </button>
           <button
             onClick={openTenPacks}
             disabled={loading || !selectedSetIsPlayable}
-            className="btn btn-secondary"
+            className="btn btn-secondary btn-ten-pack"
           >
             Open 10 Packs
           </button>
@@ -421,7 +454,7 @@ function App() {
             disabled={loading || !selectedSetIsPlayable}
             className="btn btn-god"
           >
-            Generate God Pack
+            Open God Pack
           </button>
           <button
             onClick={clearBinder}
@@ -442,7 +475,9 @@ function App() {
               {ownedActiveSetCards.length} / {activeSetCards.length} unique cards
             </p>
           </div>
-          <strong className="binder-progress">{binderProgress}%</strong>
+          <strong className={`binder-progress progress-label-${progressLevel}`}>
+            {binderProgress}%
+          </strong>
         </div>
         <div className="progress-track" aria-hidden="true">
           <div
@@ -458,16 +493,49 @@ function App() {
                 key={card.id}
                 className={`binder-card ${ownedCard ? 'is-owned' : ''}`}
               >
-                <img src={card.image} alt={card.name} loading="lazy" />
+                <img
+                  src={getCardFaceImage(card)}
+                  data-fallback-src={getCardFallbackImage(card)}
+                  alt={card.name}
+                  loading="lazy"
+                  onError={handleCardImageError}
+                />
                 <div>
                   <h3>{card.name}</h3>
-                  <p>{ownedCard ? `Owned x${ownedCard.count}` : 'Missing'}</p>
+                  <p>Owned x {ownedCard?.count || 0}</p>
                 </div>
               </article>
             );
           })}
         </div>
       </section>
+
+      {showClearBinderDialog && (
+        <div
+          className="clear-dialog-overlay"
+          role="presentation"
+          onClick={() => setShowClearBinderDialog(false)}
+        >
+          <div
+            className="clear-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="clear-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="clear-dialog-title">Clear Binder?</h2>
+            <p>This will remove every card from your binder collection.</p>
+            <div className="clear-dialog-actions">
+              <button type="button" onClick={() => setShowClearBinderDialog(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-danger" onClick={confirmClearBinder}>
+                Clear Binder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showPackModal && currentPack.length > 0 && (
         <div className="pack-reveal-overlay" role="dialog" aria-modal="true">
@@ -481,10 +549,9 @@ function App() {
                     alt={`${activeSet.setName} logo`}
                   />
                 )}
-                {activeSet?.symbol && (
-                  <img className="pack-set-symbol" src={activeSet.symbol} alt="" />
-                )}
-                <span>{activeSet?.releaseYear || 'Unknown year'}</span>
+                <span className="pack-release-year">
+                  Release Year: {activeSet?.releaseYear || 'Unknown year'}
+                </span>
               </div>
               <button
                 type="button"
@@ -515,11 +582,10 @@ function App() {
                       <div className="card-inner">
                         <div className="card-front">
                           <img
-                            src={card.image}
+                            src={getCardFaceImage(card)}
+                            data-fallback-src={getCardFallbackImage(card)}
                             alt={card.name}
-                            onError={(event) => {
-                              event.currentTarget.src = 'https://images.pokemontcg.io/xy12/20.png';
-                            }}
+                            onError={handleCardImageError}
                           />
                           {card.isRare && <div className="holo-overlay" aria-hidden="true" />}
                         </div>
@@ -591,7 +657,12 @@ function App() {
                 card.style.setProperty('--card-shift-y', '0px');
               }}
             >
-              <img src={selectedCard.largeImage || selectedCard.image} alt={selectedCard.name} />
+              <img
+                src={getCardFaceImage(selectedCard)}
+                data-fallback-src={getCardFallbackImage(selectedCard)}
+                alt={selectedCard.name}
+                onError={handleCardImageError}
+              />
               {selectedCard.isRare && <div className="holo-overlay" aria-hidden="true" />}
             </div>
             <div className="card-detail-info">

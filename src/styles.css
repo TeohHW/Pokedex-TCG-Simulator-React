@@ -512,6 +512,10 @@ button:disabled {
   font-weight: 900;
 }
 
+.pack-set-info .pack-release-year {
+  color: #050505;
+}
+
 .pack-loading-state {
   display: grid;
   gap: 16px;
@@ -737,7 +741,7 @@ button:disabled {
   inset: 0;
   pointer-events: none;
   mix-blend-mode: screen;
-  opacity: 0.82;
+  opacity: 0.36;
   background:
     linear-gradient(
       115deg,
@@ -836,7 +840,7 @@ button:disabled {
 
   42%,
   58% {
-    opacity: 0.75;
+    opacity: 0.32;
   }
 
   50% {
@@ -847,11 +851,11 @@ button:disabled {
 @keyframes sparkle-twinkle {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 0.24;
   }
 
   50% {
-    opacity: 0.95;
+    opacity: 0.44;
   }
 }
 
@@ -988,8 +992,11 @@ button:disabled {
   display: grid;
   grid-template-columns: minmax(240px, 380px) minmax(280px, 1fr);
   gap: 24px;
+  align-items: start;
   width: min(980px, 100%);
   max-height: min(860px, calc(100vh - 48px));
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 22px;
@@ -1042,7 +1049,7 @@ button:disabled {
 }
 
 .card-detail-image-wrap::before {
-  opacity: 0.78;
+  opacity: 0.32;
   mix-blend-mode: color-dodge;
   background:
     radial-gradient(
@@ -1060,7 +1067,7 @@ button:disabled {
 }
 
 .card-detail-image-wrap::after {
-  opacity: 0.42;
+  opacity: 0.18;
   mix-blend-mode: screen;
   background:
     repeating-linear-gradient(
@@ -1090,7 +1097,10 @@ button:disabled {
 }
 
 .card-detail-info {
-  overflow: auto;
+  min-height: 0;
+  max-height: calc(min(860px, 100vh - 48px) - 44px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 8px;
 }
 
@@ -1158,12 +1168,14 @@ button:disabled {
 
 .detail-section strong {
   color: var(--heading);
+  overflow-wrap: anywhere;
 }
 
 .detail-section p {
   margin: 6px 0 0;
   color: var(--muted);
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 760px) {
@@ -1496,7 +1508,7 @@ input {
 
 /* Monochrome Game Boy refinement */
 :root[data-theme='dark'] {
-  --page-bg: #111111;
+  --page-bg: #ffffff;
   --panel-bg: #f4f4f4;
   --text: #171717;
   --heading: #050505;
@@ -1510,10 +1522,7 @@ input {
 }
 
 body {
-  background:
-    linear-gradient(90deg, rgb(255 255 255 / 5%) 1px, transparent 1px),
-    linear-gradient(rgb(255 255 255 / 4%) 1px, transparent 1px),
-    var(--page-bg);
+  background: var(--page-bg);
 }
 
 .app-header,
@@ -1782,4 +1791,304 @@ button:hover {
 
 .modal-close:hover {
   background: #dc2626;
+}
+
+/* NES.css-inspired controls layered over the existing Game Boy frame borders. */
+button {
+  min-height: 42px;
+  color: #050505;
+  background: #ffffff;
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff,
+    4px 4px 0 rgb(0 0 0 / 32%);
+  text-shadow: none;
+}
+
+button:hover:not(:disabled) {
+  color: #050505;
+  background: #e7e7e7;
+  transform: translate(2px, 2px);
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff,
+    2px 2px 0 rgb(0 0 0 / 38%);
+}
+
+button:active:not(:disabled) {
+  background: #d7d7d7;
+  transform: translate(4px, 4px);
+  box-shadow:
+    inset 4px 4px 0 #adafbc,
+    inset -4px -4px 0 #ffffff;
+}
+
+.btn-danger,
+.btn-danger:hover:not(:disabled) {
+  color: #ffffff;
+  background: #e76e55;
+  text-shadow:
+    1px 1px 0 #050505,
+    -1px 1px 0 #050505,
+    1px -1px 0 #050505,
+    -1px -1px 0 #050505;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #ce372b;
+}
+
+.btn-god,
+.btn-god:hover:not(:disabled) {
+  color: #ffffff;
+  background: #209cee;
+  text-shadow:
+    1px 1px 0 #050505,
+    -1px 1px 0 #050505,
+    1px -1px 0 #050505,
+    -1px -1px 0 #050505;
+}
+
+.btn-god:hover:not(:disabled) {
+  background: #108de0;
+}
+
+.btn-primary,
+.btn-primary:hover:not(:disabled) {
+  color: #ffffff;
+  background: #92cc41;
+  text-shadow:
+    1px 1px 0 #050505,
+    -1px 1px 0 #050505,
+    1px -1px 0 #050505,
+    -1px -1px 0 #050505;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #4aa52e;
+}
+
+.button-group {
+  align-items: center;
+}
+
+.button-group .btn-god {
+  margin-left: auto;
+}
+
+.btn-ten-pack,
+.btn-ten-pack:hover:not(:disabled) {
+  color: #050505;
+  background: #f7d51d;
+  text-shadow: none;
+}
+
+.btn-ten-pack:hover:not(:disabled) {
+  background: #f2c409;
+}
+
+.series-button.is-active,
+.series-button.is-active:hover:not(:disabled) {
+  color: #050505;
+  background: var(--gb-primary-light);
+  text-shadow: none;
+}
+
+.progress-track {
+  height: 22px;
+  padding: 4px;
+  background: #ffffff;
+  box-shadow:
+    inset -3px -3px 0 #adafbc,
+    inset 3px 3px 0 #ffffff;
+}
+
+.progress-fill {
+  min-width: 0;
+  height: 100%;
+  transition: width 180ms ease;
+}
+
+.progress-low {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #e76e55 0 8px,
+      #ce372b 8px 12px
+    );
+}
+
+.progress-mid {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #f7d51d 0 8px,
+      #f2c409 8px 12px
+    );
+}
+
+.progress-good {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      #92cc41 0 8px,
+      #4aa52e 8px 12px
+    );
+}
+
+.progress-label-low {
+  color: #e76e55;
+}
+
+.progress-label-mid {
+  color: #f7d51d;
+}
+
+.progress-label-good {
+  color: #92cc41;
+}
+
+.repo-link {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: var(--gb-frame-compact-width) solid transparent;
+  border-image: var(--gb-frame-compact) var(--gb-frame-compact-slice) round;
+  color: #050505;
+  background: #ffffff;
+  background-clip: padding-box;
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff,
+    4px 4px 0 rgb(0 0 0 / 32%);
+  image-rendering: pixelated;
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.repo-link:hover {
+  color: #050505;
+  background: #e7e7e7;
+  transform: translate(2px, 2px);
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff,
+    2px 2px 0 rgb(0 0 0 / 38%);
+}
+
+.repo-link:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.repo-link svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+.clear-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 38%);
+}
+
+.clear-dialog {
+  width: min(520px, 100%);
+  border: var(--gb-frame-width) solid transparent;
+  border-image: var(--gb-frame) var(--gb-frame-slice) round;
+  padding: 26px;
+  color: #050505;
+  background: #ffffff;
+  background-clip: padding-box;
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff,
+    10px 10px 0 rgb(0 0 0 / 34%);
+}
+
+.clear-dialog h2 {
+  margin-bottom: 14px;
+  color: #050505;
+  text-shadow: none;
+}
+
+.clear-dialog p {
+  margin-bottom: 22px;
+  color: #050505;
+  line-height: 1.55;
+}
+
+.clear-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* Final NES polish: keep text readable on hover and use NES progress bars. */
+button:hover:not(:disabled),
+.set-card:hover,
+.series-button:hover:not(:disabled),
+.repo-link:hover {
+  color: #050505;
+  text-shadow: none;
+}
+
+.set-card:hover .set-card-name,
+.set-card:hover .set-card-series,
+.set-card:hover .set-card-date {
+  color: inherit;
+  text-shadow: none;
+}
+
+.set-card:hover:not(.is-selected) {
+  background: #f1f1f1;
+}
+
+.set-card.is-selected,
+.set-card.is-selected:hover {
+  color: #050505;
+  background: var(--gb-primary-light);
+  text-shadow: none;
+}
+
+.progress-track {
+  position: relative;
+  height: 34px;
+  overflow: hidden;
+  border: 4px solid #212529;
+  border-image: none;
+  padding: 4px;
+  background: #ffffff;
+  box-shadow:
+    inset 0 -4px 0 #adafbc,
+    inset 0 4px 0 #ffffff;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 0;
+  background: #212529;
+  transition: width 180ms ease;
+}
+
+.progress-low {
+  background: #e76e55;
+}
+
+.progress-mid {
+  background: #f7d51d;
+}
+
+.progress-good {
+  background: #92cc41;
 }
