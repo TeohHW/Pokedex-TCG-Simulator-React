@@ -2002,17 +2002,40 @@ button:active:not(:disabled) {
 }
 
 .clear-dialog {
+  position: relative;
   width: min(520px, 100%);
-  border: var(--gb-frame-width) solid transparent;
-  border-image: var(--gb-frame) var(--gb-frame-slice) round;
-  padding: 26px;
+  border: 0;
+  padding: 34px 38px;
   color: #050505;
   background: #ffffff;
-  background-clip: padding-box;
+  box-shadow:
+    10px 10px 0 rgb(0 0 0 / 34%);
+}
+
+.clear-dialog::before,
+.clear-dialog::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.clear-dialog::before {
+  inset: 0;
+  border: var(--gb-frame-width) solid transparent;
+  border-image: var(--gb-frame) var(--gb-frame-slice) round;
+  image-rendering: pixelated;
+}
+
+.clear-dialog::after {
+  inset: var(--gb-frame-width);
   box-shadow:
     inset -4px -4px 0 #adafbc,
-    inset 4px 4px 0 #ffffff,
-    10px 10px 0 rgb(0 0 0 / 34%);
+    inset 4px 4px 0 #ffffff;
+}
+
+.clear-dialog > * {
+  position: relative;
+  z-index: 1;
 }
 
 .clear-dialog h2 {
@@ -2091,4 +2114,150 @@ button:hover:not(:disabled),
 
 .progress-good {
   background: #92cc41;
+}
+
+/* Overlay visibility and reveal-card readability fixes. */
+.pack-reveal-modal,
+.card-detail-modal {
+  background: #ffffff;
+  background-clip: border-box;
+  box-shadow:
+    0 0 0 4px #ffffff,
+    0 0 0 8px #050505,
+    0 28px 90px rgb(0 0 0 / 48%);
+}
+
+.pack-reveal-modal {
+  width: min(1440px, calc(100vw - 28px));
+}
+
+.pack-grid {
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: 24px;
+}
+
+.pack-grid .card-front img,
+.pack-grid .card-back-image {
+  image-rendering: auto;
+}
+
+.modal-close:hover:not(:disabled) {
+  color: #ffffff;
+  background: #e76e55;
+  text-shadow:
+    1px 1px 0 #050505,
+    -1px 1px 0 #050505,
+    1px -1px 0 #050505,
+    -1px -1px 0 #050505;
+}
+
+/* Pack reveal should be a single-screen board, not a scrolling page. */
+.pack-reveal-overlay {
+  padding: 14px;
+}
+
+.pack-reveal-modal {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(920px, calc(100vh - 28px));
+  max-height: calc(100vh - 28px);
+  overflow: hidden;
+}
+
+.pack-reveal-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(260px, 1fr);
+  align-items: center;
+  height: 58px;
+  min-height: 58px;
+}
+
+.pack-set-info {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(260px, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding-right: 104px;
+  min-width: 0;
+  color: #050505;
+}
+
+.pack-set-info > * + * {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.pack-set-logo {
+  grid-column: 1;
+  justify-self: start;
+  max-width: min(320px, 24vw);
+  max-height: 56px;
+}
+
+.pack-set-info span,
+.pack-set-info .pack-release-year {
+  color: #050505;
+}
+
+.pack-release-year {
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.pack-release-year {
+  grid-column: 3;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.pack-grid {
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  grid-template-columns: repeat(5, minmax(112px, 180px));
+  grid-auto-rows: auto;
+  gap: clamp(8px, 1.2vw, 18px);
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+}
+
+.pack-grid:not(.is-scrollable) .card-container {
+  width: min(100%, 180px);
+  justify-self: center;
+}
+
+.pack-grid.is-scrollable {
+  height: auto;
+  max-height: 100%;
+  overflow-y: auto;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 180px));
+  grid-auto-rows: auto;
+  align-content: start;
+  padding: 2px 8px 18px 2px;
+  scrollbar-color: #212529 #ffffff;
+}
+
+.pack-grid.is-scrollable .card-container {
+  width: min(100%, 180px);
+  justify-self: center;
+}
+
+.pack-loading-state {
+  height: 100%;
+  min-height: 0;
+}
+
+.set-card-logo,
+.pack-set-logo {
+  filter: none;
+  image-rendering: auto;
+}
+
+@media (max-width: 860px) {
+  .pack-grid {
+    grid-template-columns: repeat(5, minmax(64px, 1fr));
+  }
 }

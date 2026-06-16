@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './styles.css';
 
 const COLLECTION_STORAGE_KEY = 'pokemon-pack-simulator-collection';
-const CARD_FLIP_DELAY = 300;
+const CARD_FLIP_DELAY = 200;
 const PACK_PREP_DELAY = 900;
 const TEN_PACK_FLIP_DELAY = CARD_FLIP_DELAY / 10;
 const CARD_BACK_IMAGE = 'https://images.pokemontcg.io/unbroken-bond/back.png';
@@ -261,10 +261,6 @@ function App() {
     addPackToBinder(nextPack);
   };
 
-  const addCurrentPackToBinder = () => {
-    addPackToBinder(currentPack);
-  };
-
   const clearBinder = () => {
     setShowClearBinderDialog(true);
   };
@@ -290,10 +286,6 @@ function App() {
     ? Math.round((ownedActiveSetCards.length / activeSetCards.length) * 100)
     : 0;
   const progressLevel = binderProgress >= 75 ? 'good' : binderProgress >= 35 ? 'mid' : 'low';
-  const packCanBeAdded =
-    currentPack.length > 0 &&
-    currentPack.every((card) => card.flipped) &&
-    !isAutoRevealing;
 
   const seriesOptions = useMemo(() => {
     const options = [
@@ -571,46 +563,38 @@ function App() {
             )}
 
             {currentPack.length > 0 && !isPreparingPack && (
-              <>
-                <div className="pack-grid">
-                  {currentPack.map((card) => (
-                    <div
-                      key={card.packId}
-                      className={`card-container ${card.flipped ? 'is-flipped' : ''}`}
-                      onClick={() => flipCard(card.packId)}
-                    >
-                      <div className="card-inner">
-                        <div className="card-front">
-                          <img
-                            src={getCardFaceImage(card)}
-                            data-fallback-src={getCardFallbackImage(card)}
-                            alt={card.name}
-                            onError={handleCardImageError}
-                          />
-                          {card.isRare && <div className="holo-overlay" aria-hidden="true" />}
-                        </div>
-                        <div className="card-back">
-                          <img
-                            className="card-back-image"
-                            src={CARD_BACK_IMAGE}
-                            alt="Pokemon card back"
-                          />
-                        </div>
+              <div
+                className={`pack-grid ${
+                  currentPack.length > 20 ? 'is-scrollable' : ''
+                }`}
+              >
+                {currentPack.map((card) => (
+                  <div
+                    key={card.packId}
+                    className={`card-container ${card.flipped ? 'is-flipped' : ''}`}
+                    onClick={() => flipCard(card.packId)}
+                  >
+                    <div className="card-inner">
+                      <div className="card-front">
+                        <img
+                          src={getCardFaceImage(card)}
+                          data-fallback-src={getCardFallbackImage(card)}
+                          alt={card.name}
+                          onError={handleCardImageError}
+                        />
+                        {card.isRare && <div className="holo-overlay" aria-hidden="true" />}
+                      </div>
+                      <div className="card-back">
+                        <img
+                          className="card-back-image"
+                          src={CARD_BACK_IMAGE}
+                          alt="Pokemon card back"
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="pack-actions">
-                  <button
-                    onClick={addCurrentPackToBinder}
-                    disabled={!packCanBeAdded || packAdded}
-                    className="btn btn-secondary"
-                  >
-                    {packAdded ? 'Pack Added to Binder' : 'Add Pack to Binder'}
-                  </button>
-                </div>
-              </>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
