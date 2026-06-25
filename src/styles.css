@@ -3023,6 +3023,53 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
   line-height: 1.1;
 }
 
+.who-guess-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.who-live-score {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(64px, auto));
+  gap: 8px;
+  margin: 0;
+  justify-self: end;
+}
+
+.who-live-score div {
+  display: grid;
+  gap: 3px;
+  min-width: 64px;
+  border: 3px solid #212529;
+  padding: 7px 8px;
+  background: #ffffff;
+  box-shadow:
+    inset -3px -3px 0 #adafbc,
+    inset 3px 3px 0 #ffffff;
+  text-align: center;
+}
+
+.who-live-score dt {
+  color: #555555;
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.who-live-score dd {
+  margin: 0;
+  color: #050505;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.who-guess-heading .who-result {
+  grid-column: 1 / -1;
+}
+
 .who-guess-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -3202,29 +3249,6 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
   font-size: clamp(1.8rem, 4vw, 3.2rem);
   line-height: 1.08;
   text-transform: capitalize;
-}
-
-.who-games-section {
-  margin-top: 16px;
-}
-
-.who-game-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 148px;
-  overflow: auto;
-  padding: 2px;
-}
-
-.who-game-list span {
-  border: 3px solid #212529;
-  padding: 6px 8px;
-  color: #050505;
-  background: #ffffff;
-  font-size: 0.78rem;
-  font-weight: 900;
-  line-height: 1.2;
 }
 
 .who-featured-section {
@@ -3675,6 +3699,18 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
     bottom: auto;
     width: 100%;
     grid-template-columns: 1fr;
+  }
+
+  .who-guess-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .who-live-score {
+    justify-self: stretch;
+  }
+
+  .who-live-score div {
+    min-width: 0;
   }
 
   .who-guess-row,

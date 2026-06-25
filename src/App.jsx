@@ -593,11 +593,6 @@ const formatLeaderboardDate = (dateValue) =>
     timeStyle: 'short',
   }).format(new Date(dateValue));
 
-const formatPokemonGameAppearances = (gameIndices = []) =>
-  [...new Set(gameIndices.map((gameIndex) => gameIndex.version?.name).filter(Boolean))]
-    .map(formatVersionGroupName)
-    .sort((firstGame, secondGame) => firstGame.localeCompare(secondGame));
-
 const isPokemonGuessCorrect = (guess, pokemon) => {
   const normalizedGuess = normalizePokemonLookup(guess);
   const answerNames = new Set([
@@ -1793,10 +1788,6 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
     () => getFeaturedTcgCards(tcgCards, [currentPokemon?.name, currentPokemon?.species?.name]),
     [tcgCards, currentPokemon],
   );
-  const gameAppearances = useMemo(
-    () => formatPokemonGameAppearances(currentPokemon?.game_indices),
-    [currentPokemon],
-  );
   const answerName = currentPokemon ? formatPokemonName(currentPokemon.species?.name || currentPokemon.name) : '';
   const activeRegionLabel =
     selectedRegionId === 'random'
@@ -2071,15 +2062,27 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
 
         {currentPokemon && roundState !== 'loading' && (
           <form className="who-guess-panel" onSubmit={submitGuess}>
-            <div>
-              <p className="card-detail-set">
-                {currentRegion?.region || 'Region'} Pokemon
-              </p>
-              <h2>
-                {roundState === 'revealed'
-                  ? answerName
-                  : "Who's that Pokemon?"}
-              </h2>
+            <div className="who-guess-heading">
+              <div>
+                <p className="card-detail-set">
+                  {currentRegion?.region || 'Region'} Pokemon
+                </p>
+                <h2>
+                  {roundState === 'revealed'
+                    ? answerName
+                    : "Who's that Pokemon?"}
+                </h2>
+              </div>
+              <dl className="who-live-score" aria-label="Current score">
+                <div>
+                  <dt>Score</dt>
+                  <dd>{score}</dd>
+                </div>
+                <div>
+                  <dt>Rounds</dt>
+                  <dd>{roundCount}</dd>
+                </div>
+              </dl>
               {result && (
                 <p className={`who-result is-${result}`}>
                   {result === 'correct'
@@ -2308,17 +2311,6 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
                     <dd>{currentPokemon.weight / 10} kg</dd>
                   </div>
                 </dl>
-                <section className="pokedex-section who-games-section">
-                  <h3>Found In Games</h3>
-                  <div className="who-game-list">
-                    {gameAppearances.map((gameName) => (
-                      <span key={gameName}>{gameName}</span>
-                    ))}
-                    {!gameAppearances.length && (
-                      <p className="pokedex-status">No game appearance data found.</p>
-                    )}
-                  </div>
-                </section>
               </div>
             </div>
 
