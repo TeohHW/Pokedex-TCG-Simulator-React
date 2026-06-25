@@ -1,4 +1,4 @@
-## Pokédex-TCG Simulator
+## Pokémon Lab
 
 A browser-based Pokédex & TCG simulator built with React.
 
