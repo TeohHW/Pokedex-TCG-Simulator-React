@@ -214,6 +214,19 @@ const LATEST_VERSION_GROUPS = [
   'firered-leafgreen',
   'ruby-sapphire',
 ];
+const POKEDEX_VERSION_GROUPS = {
+  kanto: 'firered-leafgreen',
+  hoenn: 'emerald',
+  'updated-johto': 'heartgold-soulsilver',
+  'extended-sinnoh': 'platinum',
+  'updated-unova': 'black-2-white-2',
+  'kalos-central': 'x-y',
+  'updated-hoenn': 'omega-ruby-alpha-sapphire',
+  'original-alola': 'sun-moon',
+  galar: 'sword-shield',
+  paldea: 'scarlet-violet',
+};
+const TYPE_NAMES = Object.keys(TYPE_ICONS);
 const STAT_LABELS = {
   hp: 'HP',
   attack: 'Attack',
@@ -221,6 +234,31 @@ const STAT_LABELS = {
   'special-attack': 'Sp. Atk',
   'special-defense': 'Sp. Def',
   speed: 'Speed',
+};
+const STAT_SORT_OPTIONS = [
+  { id: 'hp', label: 'HP' },
+  { id: 'attack', label: 'Attack' },
+  { id: 'defense', label: 'Defense' },
+  { id: 'special-attack', label: 'Sp. Atk' },
+  { id: 'special-defense', label: 'Sp. Def' },
+  { id: 'speed', label: 'Speed' },
+];
+const POKEDEX_METADATA_SORTS = new Set([
+  'type',
+  'legendary',
+  'generation',
+  ...STAT_SORT_OPTIONS.map((stat) => `stat-${stat.id}`),
+]);
+const GENERATION_ORDER = {
+  'generation-i': 1,
+  'generation-ii': 2,
+  'generation-iii': 3,
+  'generation-iv': 4,
+  'generation-v': 5,
+  'generation-vi': 6,
+  'generation-vii': 7,
+  'generation-viii': 8,
+  'generation-ix': 9,
 };
 
 const randomItem = (items) => items[Math.floor(Math.random() * items.length)];
@@ -249,6 +287,33 @@ const getPokemonOfficialArtworkUrl = (pokemonId) =>
   pokemonId
     ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonId}.png`
     : '';
+
+const fetchPokemonListMetadata = (pokemonEntry, options = {}) =>
+  fetch(`${POKEAPI_BASE_URL}/pokemon/${pokemonEntry.pokemonId || normalizePokemonLookup(pokemonEntry.name)}`, options)
+    .then((pokemonResponse) => {
+      if (!pokemonResponse.ok) {
+        throw new Error('Unable to load Pokemon sort data.');
+      }
+      return pokemonResponse.json();
+    })
+    .then((pokemon) =>
+      fetch(pokemon.species.url, options).then((speciesResponse) => {
+        if (!speciesResponse.ok) {
+          throw new Error('Unable to load Pokemon species sort data.');
+        }
+        return speciesResponse.json().then((species) => ({
+          name: pokemonEntry.name,
+          primaryType: pokemon.types[0]?.type?.name || '',
+          types: pokemon.types.map(({ type }) => type.name),
+          isLegendary: Boolean(species.is_legendary),
+          generation: species.generation?.name || '',
+          generationOrder: GENERATION_ORDER[species.generation?.name] || Number.MAX_SAFE_INTEGER,
+          stats: Object.fromEntries(
+            pokemon.stats.map((stat) => [stat.stat.name, stat.base_stat]),
+          ),
+        }));
+      }),
+    );
 
 const normalizePokemonLookup = (pokemonName = '') =>
   String(pokemonName)
@@ -459,6 +524,56 @@ const getAvailableLevelUpMoveGroups = (pokemon) => {
   });
 };
 
+const getTeamVersionGroup = (pokedexId) =>
+  POKEDEX_VERSION_GROUPS[pokedexId] || LATEST_VERSION_GROUPS[0];
+
+const TEAM_POKEDEX_OPTIONS = [
+  { ...ALL_POKEDEX_OPTION, label: 'National Pokedex', region: 'All Regions' },
+  ...POKEDEX_OPTIONS,
+];
+const QUIZ_CATEGORY_OPTIONS = [
+  { id: 'mixed', label: 'Mixed Quiz' },
+  { id: 'type', label: 'Type' },
+  { id: 'evolution', label: 'Evolution' },
+  { id: 'generation', label: 'Generation' },
+  { id: 'legendary', label: 'Legendary' },
+  { id: 'pokedex-entry', label: 'Pokedex Entry' },
+  { id: 'ability', label: 'Ability' },
+  { id: 'comparison', label: 'Comparisons' },
+  { id: 'stats', label: 'Strongest Stat' },
+  { id: 'type-effectiveness', label: 'Effectiveness' },
+  { id: 'move', label: 'Moves' },
+  { id: 'number-region', label: 'Number / Region' },
+  { id: 'cry-sprite', label: 'Cry / Sprite' },
+  { id: 'starter-evolution', label: 'Starter / Evolution Line' },
+];
+const STATION_NAV_OPTIONS = [
+  { id: 'home', label: 'Home' },
+  { id: 'pokedex', label: 'Pokedex' },
+  { id: 'tcg', label: 'TCG Simulator' },
+  { id: 'who', label: "Who's That?" },
+  { id: 'team', label: 'Team Planner' },
+  { id: 'quiz', label: 'Pokemon Quiz' },
+];
+const COMMON_ABILITY_DISTRACTORS = [
+  'overgrow',
+  'blaze',
+  'torrent',
+  'shield-dust',
+  'static',
+  'intimidate',
+  'levitate',
+  'swift-swim',
+  'chlorophyll',
+  'pressure',
+  'synchronize',
+  'inner-focus',
+  'sturdy',
+  'compound-eyes',
+  'huge-power',
+  'guts',
+];
+
 const getLevelUpMovesForVersionGroup = (pokemon, versionGroup) => {
   if (!pokemon?.moves?.length || !versionGroup) {
     return [];
@@ -484,6 +599,517 @@ const getLevelUpMovesForVersionGroup = (pokemon, versionGroup) => {
     .sort((firstMove, secondMove) => (
       firstMove.level - secondMove.level || firstMove.name.localeCompare(secondMove.name)
     ));
+};
+
+const getTypeMultiplierMap = (typeData = []) =>
+  TYPE_NAMES.reduce((multipliers, typeName) => {
+    let multiplier = 1;
+
+    typeData.forEach((type) => {
+      const relations = type.damage_relations;
+      if (relations.double_damage_from.some((damageType) => damageType.name === typeName)) {
+        multiplier *= 2;
+      }
+      if (relations.half_damage_from.some((damageType) => damageType.name === typeName)) {
+        multiplier *= 0.5;
+      }
+      if (relations.no_damage_from.some((damageType) => damageType.name === typeName)) {
+        multiplier *= 0;
+      }
+    });
+
+    return {
+      ...multipliers,
+      [typeName]: multiplier,
+    };
+  }, {});
+
+const summarizeTeamTypeMatchups = (teamMembers) =>
+  TYPE_NAMES.map((typeName) => {
+    const multipliers = teamMembers
+      .map((member) => member.defenseMultipliers?.[typeName])
+      .filter((multiplier) => multiplier !== undefined);
+
+    return {
+      type: typeName,
+      weak: multipliers.filter((multiplier) => multiplier > 1).length,
+      resist: multipliers.filter((multiplier) => multiplier > 0 && multiplier < 1).length,
+      immune: multipliers.filter((multiplier) => multiplier === 0).length,
+    };
+  });
+
+const summarizeTeamMoveCoverage = (teamMembers) => {
+  const selectedMoveTypes = [
+    ...new Set(
+      teamMembers.flatMap((member) =>
+        member.selectedMoves
+          .map((moveName) => member.availableMoves.find((move) => move.name === moveName)?.type)
+          .filter(Boolean),
+      ),
+    ),
+  ];
+
+  return TYPE_NAMES.map((typeName) => ({
+    type: typeName,
+    hitBy: selectedMoveTypes.filter((moveType) =>
+      teamMembers[0]?.moveTypeCoverage?.[moveType]?.includes(typeName),
+    ),
+  })).filter((coverage) => coverage.hitBy.length);
+};
+
+const getTeamAverageStats = (teamMembers) =>
+  STAT_SORT_OPTIONS.map((stat) => {
+    const total = teamMembers.reduce((sum, member) => sum + (member.stats[stat.id] || 0), 0);
+    return {
+      ...stat,
+      value: teamMembers.length ? Math.round(total / teamMembers.length) : 0,
+    };
+  });
+
+const shuffleItems = (items) => [...items].sort(() => Math.random() - 0.5);
+
+const makeChoices = (correctAnswer, distractors, count = 4) => {
+  const uniqueDistractors = [...new Set(distractors)]
+    .filter((item) => item && item !== correctAnswer);
+  return shuffleItems([correctAnswer, ...shuffleItems(uniqueDistractors).slice(0, count - 1)]);
+};
+
+const getPokemonPool = (selectedDex, pokemonList) =>
+  pokemonList.filter((pokemon) => pokemon.pokemonId || selectedDex === ALL_POKEDEX_OPTION.id);
+
+const getPokemonQuizData = (pokemonEntry, options = {}) =>
+  fetchPokemonByNameOrSpecies(pokemonEntry.name, options)
+    .then((pokemon) =>
+      fetch(pokemon.species.url, options).then((speciesResponse) => {
+        if (!speciesResponse.ok) {
+          throw new Error('Unable to load Pokemon quiz data.');
+        }
+        return speciesResponse.json().then((species) => ({ pokemon, species }));
+      }),
+    );
+
+const getEvolutionNames = (node) =>
+  node
+    ? [node.species.name, ...node.evolves_to.flatMap((child) => getEvolutionNames(child))]
+    : [];
+
+const findEvolutionNode = (node, pokemonName, parentName = '') => {
+  if (!node) return null;
+  if (node.species.name === pokemonName) {
+    return { node, parentName };
+  }
+
+  return node.evolves_to
+    .map((child) => findEvolutionNode(child, pokemonName, node.species.name))
+    .find(Boolean) || null;
+};
+
+const loadEvolutionChain = (species, options = {}) =>
+  fetch(species.evolution_chain.url, options).then((response) => {
+    if (!response.ok) {
+      throw new Error('Unable to load evolution quiz data.');
+    }
+    return response.json();
+  });
+
+const getRegionForGeneration = (generationName = '') =>
+  ({
+    'generation-i': 'Kanto',
+    'generation-ii': 'Johto',
+    'generation-iii': 'Hoenn',
+    'generation-iv': 'Sinnoh',
+    'generation-v': 'Unova',
+    'generation-vi': 'Kalos',
+    'generation-vii': 'Alola',
+    'generation-viii': 'Galar',
+    'generation-ix': 'Paldea',
+  }[generationName] || 'Unknown');
+
+const maskPokemonNameInText = (text = '', pokemonName = '') => {
+  const nameParts = [
+    pokemonName,
+    formatPokemonName(pokemonName),
+    ...pokemonName.split('-'),
+  ]
+    .filter((part) => part && part.length > 2)
+    .sort((firstPart, secondPart) => secondPart.length - firstPart.length);
+
+  return nameParts.reduce((maskedText, namePart) => {
+    const escapedName = namePart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return maskedText.replace(new RegExp(`\\b${escapedName}\\b`, 'gi'), 'this Pokemon');
+  }, text);
+};
+
+const buildPokemonQuizQuestion = async ({
+  category,
+  pokemonList,
+  selectedDex,
+  typeChart,
+}) => {
+  const pool = getPokemonPool(selectedDex, pokemonList);
+
+  if (!pool.length) {
+    throw new Error('No Pokemon are available for this quiz.');
+  }
+
+  const activeCategory = category === 'mixed'
+    ? randomItem(QUIZ_CATEGORY_OPTIONS.filter((option) => option.id !== 'mixed')).id
+    : category;
+  const pokemonEntry = randomItem(pool);
+  const { pokemon, species } = await getPokemonQuizData(pokemonEntry);
+  const pokemonName = formatPokemonName(pokemon.species?.name || pokemon.name);
+  const artwork = pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default;
+  const sprite = pokemon.sprites.front_default;
+  const getPoolOfficialArtwork = (pokemonNameValue) => {
+    const matchingEntry = pool.find((entry) => entry.name === pokemonNameValue);
+    return getPokemonOfficialArtworkUrl(matchingEntry?.pokemonId);
+  };
+  const randomPokemonNameChoices = () =>
+    pool.map((entry) => formatPokemonName(entry.name));
+
+  if (activeCategory === 'type') {
+    const questionKind = pokemon.types.length > 1 && Math.random() > 0.45 ? 'dual' : 'single';
+    const correctAnswer = pokemon.types.map(({ type }) => formatPokemonName(type.name)).join(' / ');
+    const typeCombos = TYPE_NAMES.flatMap((firstType) =>
+      TYPE_NAMES.map((secondType) =>
+        firstType === secondType
+          ? formatPokemonName(firstType)
+          : `${formatPokemonName(firstType)} / ${formatPokemonName(secondType)}`,
+      ),
+    );
+
+    return {
+      category: questionKind === 'dual' ? 'Dual Type' : 'Pokemon Type',
+      prompt: questionKind === 'dual'
+        ? `Which type combination does ${pokemonName} have?`
+        : `What type is ${pokemonName}?`,
+      answer: correctAnswer,
+      choices: makeChoices(correctAnswer, typeCombos),
+      visual: { kind: 'silhouette', image: artwork, label: 'Type scan' },
+    };
+  }
+
+  if (activeCategory === 'evolution' || activeCategory === 'starter-evolution') {
+    const chain = await loadEvolutionChain(species);
+    const match = findEvolutionNode(chain.chain, species.name);
+    const chainNames = getEvolutionNames(chain.chain);
+    const evolvesToNames = match?.node.evolves_to.map((evolution) => evolution.species.name) || [];
+    const evolvesTo = randomItem(evolvesToNames) || '';
+    const evolvesFrom = match?.parentName || '';
+    const evolutionQuestionKinds = [
+      evolvesTo && 'evolves-to',
+      evolvesFrom && 'evolves-from',
+      'final',
+      chainNames.length > 1 && 'missing',
+      activeCategory === 'starter-evolution' && 'starter',
+      activeCategory === 'starter-evolution' && 'does-not-evolve',
+    ].filter(Boolean);
+    const questionKind = randomItem(evolutionQuestionKinds);
+
+    if (questionKind === 'evolves-to') {
+      const answer = formatPokemonName(evolvesTo);
+      const validEvolutionAnswers = new Set(evolvesToNames.map(formatPokemonName));
+      return {
+        category: 'Evolution',
+        prompt: evolvesToNames.length > 1
+          ? `Which of these Pokemon can ${pokemonName} evolve into next?`
+          : `What is the next evolution of ${pokemonName}?`,
+        answer,
+        choices: makeChoices(
+          answer,
+          randomPokemonNameChoices().filter((choice) => !validEvolutionAnswers.has(choice)),
+        ),
+        visual: {
+          kind: 'art-line',
+          images: [{ image: artwork, fallback: sprite }],
+          label: `${pokemonName} -> ?`,
+        },
+      };
+    }
+
+    if (questionKind === 'evolves-from') {
+      const answer = formatPokemonName(evolvesFrom);
+      return {
+        category: 'Pre-Evolution',
+        prompt: `Which Pokemon evolves directly into ${pokemonName}?`,
+        answer,
+        choices: makeChoices(answer, randomPokemonNameChoices()),
+        visual: {
+          kind: 'art-line',
+          images: [{ image: artwork, fallback: sprite }],
+          label: `? -> ${pokemonName}`,
+        },
+      };
+    }
+
+    if (questionKind === 'missing') {
+      const answer = formatPokemonName(chainNames.at(-1));
+      const shownEvolutionNames = chainNames.slice(0, -1);
+      return {
+        category: 'Missing Evolution',
+        prompt: `Which Pokemon completes this evolution line: ${shownEvolutionNames.map(formatPokemonName).join(' -> ')} -> ?`,
+        answer,
+        choices: makeChoices(answer, randomPokemonNameChoices()),
+        visual: {
+          kind: 'art-line',
+          images: shownEvolutionNames.map((name) => {
+            const matchingEntry = pool.find((entry) => entry.name === name);
+            return {
+              image: getPoolOfficialArtwork(name),
+              fallback: getPokemonSpriteUrl(matchingEntry?.pokemonId),
+            };
+          }),
+          label: 'Evolution line',
+        },
+      };
+    }
+
+    if (questionKind === 'starter') {
+      const starterNames = new Set(POKEDEX_OPTIONS.flatMap((pokedex) =>
+        pokedex.starters.map((starterId) =>
+          pool.find((entry) => entry.pokemonId === String(starterId))?.name,
+        ),
+      ).filter(Boolean));
+      const answer = starterNames.has(species.name) ? 'Starter Pokemon' : 'Not a starter';
+      return {
+        category: 'Starter Pokemon',
+        prompt: `Is ${pokemonName} a starter Pokemon in this quiz pool?`,
+        answer,
+        choices: ['Starter Pokemon', 'Not a starter'],
+        visual: { kind: 'silhouette', image: artwork, label: 'Starter check' },
+      };
+    }
+
+    if (questionKind === 'does-not-evolve') {
+      const noEvolutionEntries = shuffleItems(pool).slice(0, 16);
+      const candidates = await Promise.all(
+        noEvolutionEntries.map((entry) =>
+          getPokemonQuizData(entry)
+            .then(({ species: candidateSpecies }) => loadEvolutionChain(candidateSpecies))
+            .then((candidateChain) => ({
+              name: entry.name,
+              doesNotEvolve: getEvolutionNames(candidateChain.chain).length === 1,
+            }))
+            .catch(() => null),
+        ),
+      );
+      const answerEntry = candidates.find((candidate) => candidate?.doesNotEvolve);
+      if (answerEntry) {
+        const answer = formatPokemonName(answerEntry.name);
+        return {
+          category: 'Does Not Evolve',
+          prompt: 'Which one of these Pokemon does not evolve?',
+          answer,
+          choices: makeChoices(answer, candidates.filter(Boolean).map((candidate) => formatPokemonName(candidate.name))),
+          visual: { kind: 'badge', label: 'Evolution check' },
+        };
+      }
+    }
+
+    const answer = evolvesTo ? 'No' : 'Yes';
+    return {
+      category: 'Final Evolution',
+      prompt: `Is ${pokemonName} the final form in its evolution line?`,
+      answer,
+      choices: ['Yes', 'No'],
+      visual: { kind: 'silhouette', image: artwork, label: 'Final form?' },
+    };
+  }
+
+  if (activeCategory === 'generation') {
+    const answer = formatGenerationName(species.generation?.name);
+    return {
+      category: 'Generation',
+      prompt: `Which generation introduced ${pokemonName}?`,
+      answer,
+      choices: makeChoices(answer, Object.keys(GENERATION_ORDER).map(formatGenerationName)),
+      visual: { kind: 'sprite', image: sprite, label: 'Archive lookup' },
+    };
+  }
+
+  if (activeCategory === 'legendary') {
+    const answer = species.is_legendary ? 'Legendary' : species.is_mythical ? 'Mythical' : 'Regular';
+    return {
+      category: 'Legendary Status',
+      prompt: `How is ${pokemonName} classified?`,
+      answer,
+      choices: ['Legendary', 'Mythical', 'Regular'],
+      visual: { kind: 'silhouette', image: artwork, label: 'Rarity scan' },
+    };
+  }
+
+  if (activeCategory === 'pokedex-entry') {
+    const answer = pokemonName;
+    const flavorText = getEnglishFlavorText(species) || 'No Pokedex entry found.';
+    return {
+      category: 'Pokedex Entry',
+      prompt: 'Which Pokemon matches this Pokedex description?',
+      answer,
+      choices: makeChoices(answer, randomPokemonNameChoices()),
+      visual: { kind: 'entry', text: maskPokemonNameInText(flavorText, species.name) },
+    };
+  }
+
+  if (activeCategory === 'ability') {
+    const answer = formatPokemonName(randomItem(pokemon.abilities).ability.name);
+    return {
+      category: 'Ability',
+      prompt: `Which ability can ${pokemonName} have?`,
+      answer,
+      choices: makeChoices(answer, COMMON_ABILITY_DISTRACTORS.map(formatPokemonName)),
+      visual: { kind: 'silhouette', image: artwork, label: 'Ability scan' },
+    };
+  }
+
+  if (activeCategory === 'comparison') {
+    const otherEntry = randomItem(pool.filter((entry) => entry.name !== pokemonEntry.name)) || pokemonEntry;
+    const { pokemon: otherPokemon } = await getPokemonQuizData(otherEntry);
+    const comparisonKinds = ['height', 'weight', ...STAT_SORT_OPTIONS.map((stat) => stat.id)];
+    const comparisonKind = randomItem(comparisonKinds);
+    const firstValue = comparisonKind === 'height'
+      ? pokemon.height
+      : comparisonKind === 'weight'
+        ? pokemon.weight
+        : pokemon.stats.find((stat) => stat.stat.name === comparisonKind)?.base_stat || 0;
+    const secondValue = comparisonKind === 'height'
+      ? otherPokemon.height
+      : comparisonKind === 'weight'
+        ? otherPokemon.weight
+        : otherPokemon.stats.find((stat) => stat.stat.name === comparisonKind)?.base_stat || 0;
+    const otherName = formatPokemonName(otherPokemon.species?.name || otherPokemon.name);
+    const answer = firstValue >= secondValue ? pokemonName : otherName;
+    const label = comparisonKind === 'height'
+      ? 'taller'
+      : comparisonKind === 'weight'
+        ? 'heavier'
+        : `higher ${STAT_LABELS[comparisonKind] || formatPokemonName(comparisonKind)}`;
+
+    return {
+      category: 'Comparison',
+      prompt: `Which Pokemon is ${label}?`,
+      answer,
+      choices: [pokemonName, otherName],
+      visual: {
+        kind: 'versus',
+        firstImage: pokemon.sprites.front_default,
+        secondImage: otherPokemon.sprites.front_default,
+        firstName: pokemonName,
+        secondName: otherName,
+      },
+    };
+  }
+
+  if (activeCategory === 'type-effectiveness') {
+    const typeData = pokemon.types.map(({ type }) => typeChart[type.name]).filter(Boolean);
+    const multipliers = getTypeMultiplierMap(typeData);
+    const matchupKinds = [
+      {
+        id: 'weak',
+        types: TYPE_NAMES.filter((typeName) => multipliers[typeName] > 1),
+      },
+      {
+        id: 'resist',
+        types: TYPE_NAMES.filter((typeName) => multipliers[typeName] > 0 && multipliers[typeName] < 1),
+      },
+      {
+        id: 'immune',
+        types: TYPE_NAMES.filter((typeName) => multipliers[typeName] === 0),
+      },
+    ].filter((matchup) => matchup.types.length);
+    const matchup = randomItem(matchupKinds);
+    const kind = matchup.id;
+    const correctTypes = matchup.types.filter((typeName) => {
+      const multiplier = multipliers[typeName];
+      if (kind === 'weak') return multiplier > 1;
+      if (kind === 'resist') return multiplier > 0 && multiplier < 1;
+      return multiplier === 0;
+    });
+    const answer = formatPokemonName(randomItem(correctTypes));
+
+    return {
+      category: kind === 'weak' ? 'Type Effectiveness' : kind === 'resist' ? 'Type Resistance' : 'Type Immunity',
+      prompt: kind === 'weak'
+        ? `Which type is super effective against ${pokemonName}?`
+        : kind === 'resist'
+          ? `Which type is not very effective against ${pokemonName}?`
+          : `Which type has no effect against ${pokemonName}?`,
+      answer,
+      choices: makeChoices(answer, TYPE_NAMES.map(formatPokemonName)),
+      visual: { kind: 'silhouette', image: artwork, label: 'Battle matchup' },
+    };
+  }
+
+  if (activeCategory === 'move') {
+    const levelUpMoves = getLevelUpMovesForVersionGroup(pokemon, getTeamVersionGroup(selectedDex)).slice(0, 60);
+    const move = randomItem(levelUpMoves.length ? levelUpMoves : pokemon.moves.map(({ move: pokemonMove }) => ({
+      name: pokemonMove.name,
+      url: pokemonMove.url,
+      level: 1,
+    })).slice(0, 60));
+    const moveData = await fetch(move.url).then((response) => {
+      if (!response.ok) {
+        throw new Error('Unable to load move quiz data.');
+      }
+      return response.json();
+    });
+    const answer = formatPokemonName(moveData.type.name);
+
+    return {
+      category: 'Move Type',
+      prompt: `What type is ${formatPokemonName(move.name)}?`,
+      answer,
+      choices: makeChoices(answer, TYPE_NAMES.map(formatPokemonName)),
+      visual: { kind: 'move', moveName: formatPokemonName(move.name), moveClass: formatPokemonName(moveData.damage_class.name) },
+    };
+  }
+
+  if (activeCategory === 'number-region') {
+    const questionKind = Math.random() > 0.5 ? 'number' : 'region';
+    const answer = questionKind === 'number'
+      ? String(pokemon.id)
+      : getRegionForGeneration(species.generation?.name);
+
+    return {
+      category: questionKind === 'number' ? 'Pokedex Number' : 'Region',
+      prompt: questionKind === 'number'
+        ? `What is ${pokemonName}'s National Pokedex number?`
+        : `Which region is ${pokemonName} from?`,
+      answer,
+      choices: questionKind === 'number'
+        ? makeChoices(answer, shuffleItems(pool).map((entry) => String(entry.pokemonId || entry.entryNumber)))
+        : makeChoices(answer, POKEDEX_OPTIONS.map((pokedex) => pokedex.region)),
+      visual: { kind: 'sprite', image: sprite, label: 'Pokedex lookup' },
+    };
+  }
+
+  if (activeCategory === 'cry-sprite') {
+    const questionKind = pokemon.cries?.latest && Math.random() > 0.5 ? 'cry' : 'sprite';
+    const answer = pokemonName;
+
+    return {
+      category: questionKind === 'cry' ? 'Pokemon Cry' : 'Sprite Recognition',
+      prompt: questionKind === 'cry'
+        ? 'Which Pokemon made this cry?'
+        : 'Which Pokemon is this sprite?',
+      answer,
+      choices: makeChoices(answer, randomPokemonNameChoices()),
+      visual: questionKind === 'cry'
+        ? { kind: 'cry', cryUrl: pokemon.cries.latest || pokemon.cries.legacy }
+        : { kind: 'sprite', image: sprite, label: 'Sprite scan' },
+    };
+  }
+
+  const strongestStat = pokemon.stats.reduce((strongest, stat) =>
+    stat.base_stat > strongest.base_stat ? stat : strongest,
+  pokemon.stats[0]);
+  const answer = STAT_LABELS[strongestStat.stat.name] || formatPokemonName(strongestStat.stat.name);
+  return {
+    category: 'Strongest Stat',
+    prompt: `What is ${pokemonName}'s highest base stat?`,
+    answer,
+    choices: makeChoices(answer, STAT_SORT_OPTIONS.map((stat) => stat.label)),
+    visual: { kind: 'silhouette', image: artwork, label: 'Stat scan' },
+  };
 };
 
 const getSpriteVariants = (sprites = {}) =>
@@ -672,7 +1298,7 @@ const hasPlayableCards = (expansion) =>
       expansion?.rares?.length,
   );
 
-function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos }) {
+function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQuiz }) {
   const [allExpansions, setAllExpansions] = useState(null);
   const [selectedSet, setSelectedSet] = useState('base1');
   const [selectedSeries, setSelectedSeries] = useState('All');
@@ -973,33 +1599,24 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos }) {
 
   return (
     <div className="app-container">
-      <header className="app-header">
+      <header className="app-header tcg-header">
         <button type="button" className="brand-mark brand-home-button" onClick={onBack}>
           <span className="nes-pokeball brand-pokeball" aria-hidden="true" />
           <h1>Pokémon TCG Simulator</h1>
         </button>
-        <div className="header-actions">
-          <button type="button" className="nes-btn nav-button" onClick={onBack}>
-            Home
-          </button>
-          <button type="button" className="nes-btn nav-button" onClick={onOpenPokedex}>
-            Pokedex
-          </button>
-          <button type="button" className="nes-btn nav-button" onClick={onOpenWhos}>
-            Who's That?
-          </button>
-          <a
-            className="repo-link"
-            href={REPOSITORY_URL}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open GitHub repository"
-          >
-            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.86c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-            </svg>
-          </a>
-        </div>
+        <StationNav
+          activeStation="tcg"
+          onNavigate={(station) => {
+            const handlers = {
+              home: onBack,
+              pokedex: onOpenPokedex,
+              who: onOpenWhos,
+              team: onOpenTeam,
+              quiz: onOpenQuiz,
+            };
+            handlers[station]?.();
+          }}
+        />
       </header>
 
       <div className="control-panel">
@@ -1435,7 +2052,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos }) {
   );
 }
 
-function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
+function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg, onOpenTeam, onOpenQuiz }) {
   const regionOptions = useMemo(
     () => [
       { id: 'random', label: 'Random Region', region: 'Surprise' },
@@ -1821,18 +2438,19 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
             <span className="nes-pokeball brand-pokeball" aria-hidden="true" />
             <h1>Who's That Pokemon?</h1>
           </button>
-          <div className="header-actions">
-            <button type="button" className="nes-btn nav-button" onClick={onBack}>
-              Home
-            </button>
-            <button type="button" className="nes-btn nav-button" onClick={onOpenPokedex}>
-              Pokedex
-            </button>
-            <button type="button" className="nes-btn nav-button" onClick={onOpenTcg}>
-              TCG
-            </button>
-            <GitHubRepoLink />
-          </div>
+          <StationNav
+            activeStation="who"
+            onNavigate={(station) => {
+              const handlers = {
+                home: onBack,
+                pokedex: onOpenPokedex,
+                tcg: onOpenTcg,
+                team: onOpenTeam,
+                quiz: onOpenQuiz,
+              };
+              handlers[station]?.();
+            }}
+          />
         </header>
 
         <section className="who-setup-layout">
@@ -2011,30 +2629,22 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
           <span className="nes-pokeball brand-pokeball" aria-hidden="true" />
           <h1>Who's That Pokemon?</h1>
         </button>
-        <div className="header-actions">
-          <button
-            type="button"
-            className="nes-btn nav-button"
-            onClick={() => requestLeaveGame(onBack)}
-          >
-            Home
-          </button>
-          <button
-            type="button"
-            className="nes-btn nav-button"
-            onClick={() => requestLeaveGame(onOpenPokedex)}
-          >
-            Pokedex
-          </button>
-          <button
-            type="button"
-            className="nes-btn nav-button"
-            onClick={() => requestLeaveGame(onOpenTcg)}
-          >
-            TCG
-          </button>
-          <GitHubRepoLink />
-        </div>
+        <StationNav
+          activeStation="who"
+          onNavigate={(station) => {
+            const handlers = {
+              home: onBack,
+              pokedex: onOpenPokedex,
+              tcg: onOpenTcg,
+              team: onOpenTeam,
+              quiz: onOpenQuiz,
+            };
+            const handler = handlers[station];
+            if (handler) {
+              requestLeaveGame(handler);
+            }
+          }}
+        />
       </header>
 
       <section className="who-play-shell">
@@ -2188,17 +2798,33 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
           onClick={() => setShowGameMenu(false)}
         >
           <aside className="who-menu-panel" onClick={(event) => event.stopPropagation()}>
-            <button
-              type="button"
-              className="modal-close nes-btn"
-              onClick={() => setShowGameMenu(false)}
-              aria-label="Close menu"
-            >
-              Close
-            </button>
+            <h2 id="who-menu-title" className="who-start-menu-title">
+              {playerName}
+            </h2>
+            <ul className="who-start-menu-list" aria-label="Pause menu">
+              <li>
+                <button type="button" onClick={() => setShowGameMenu(false)}>
+                  Resume
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={changeRegion}>
+                  Region
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={resetGame}>
+                  New Player
+                </button>
+              </li>
+              <li>
+                <button type="button" onClick={() => setShowGameMenu(false)}>
+                  Exit
+                </button>
+              </li>
+            </ul>
             <div className="who-score-panel">
               <p className="card-detail-set">{activeRegionLabel}</p>
-              <h2 id="who-menu-title">{playerName}</h2>
               <dl className="who-score-list">
                 <div>
                   <dt>Score</dt>
@@ -2213,14 +2839,6 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg }) {
                   <dd>{currentRegion?.region || 'Loading'}</dd>
                 </div>
               </dl>
-              <div className="who-menu-actions">
-                <button type="button" className="nes-btn is-primary" onClick={changeRegion}>
-                  Change Region
-                </button>
-                <button type="button" className="nes-btn is-error" onClick={resetGame}>
-                  New Player
-                </button>
-              </div>
             </div>
 
             {error && <p className="pokedex-error">{error}</p>}
@@ -2600,9 +3218,124 @@ function HomePage({ onChoose }) {
               Guess silhouetted Pokemon by region and climb the leaderboard.
             </span>
           </button>
+
+          <button
+            type="button"
+            className="choice-card nes-btn is-success"
+            onClick={() => onChoose('team')}
+          >
+            <span className="choice-icon" aria-hidden="true">
+              TEAM
+            </span>
+            <span className="choice-title">Pokemon Team Planner</span>
+            <span className="choice-copy">
+              Build a six-Pokemon team, pick moves, and inspect matchups.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="choice-card quiz-choice-card nes-btn"
+            onClick={() => onChoose('quiz')}
+          >
+            <span className="choice-icon" aria-hidden="true">
+              Q
+            </span>
+            <span className="choice-title">Pokemon Quiz</span>
+            <span className="choice-copy">
+              Test types, evolutions, stats, cries, and Pokedex knowledge.
+            </span>
+          </button>
         </div>
       </section>
     </main>
+  );
+}
+
+function StationNav({ activeStation, onNavigate }) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const activeStationLabel =
+    STATION_NAV_OPTIONS.find((station) => station.id === activeStation)?.label || 'Station';
+
+  const handleNavigate = (stationId) => {
+    setIsMenuOpen(false);
+    if (stationId !== activeStation) {
+      onNavigate(stationId);
+    }
+  };
+
+  useEffect(() => {
+    if (!isMenuOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMenuOpen]);
+
+  return (
+    <div className="header-actions">
+      <button
+        type="button"
+        className="nes-btn station-menu-button"
+        onClick={() => setIsMenuOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={isMenuOpen}
+      >
+        Menu
+      </button>
+      <GitHubRepoLink />
+      {isMenuOpen && (
+        <div className="station-menu-overlay" role="presentation">
+          <button
+            type="button"
+            className="station-menu-scrim"
+            onClick={() => setIsMenuOpen(false)}
+            aria-label="Close station menu"
+          />
+          <div
+            className="station-menu-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`${activeStation}-station-menu-title`}
+          >
+            <div className="station-menu-heading">
+              <div>
+                <p>Current station</p>
+                <h2 id={`${activeStation}-station-menu-title`}>{activeStationLabel}</h2>
+              </div>
+              <button
+                type="button"
+                className="nes-btn station-menu-close"
+                onClick={() => setIsMenuOpen(false)}
+                aria-label="Close station menu"
+              >
+                X
+              </button>
+            </div>
+            <div className="station-menu-list" aria-label="Choose station">
+              {STATION_NAV_OPTIONS.map((station) => (
+                <button
+                  key={station.id}
+                  type="button"
+                  className={`nes-btn station-menu-option ${
+                    station.id === activeStation ? 'is-active' : ''
+                  }`}
+                  onClick={() => handleNavigate(station.id)}
+                >
+                  <span>{station.label}</span>
+                  {station.id === activeStation && <strong>Now</strong>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2619,6 +3352,1037 @@ function GitHubRepoLink() {
         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.65 7.65 0 0 1 8 3.86c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
       </svg>
     </a>
+  );
+}
+
+function PokemonTeamPlanner({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOpenQuiz }) {
+  const [selectedDex, setSelectedDex] = useState(POKEDEX_OPTIONS[0].id);
+  const [pokemonList, setPokemonList] = useState([]);
+  const [pokemonSearchTerm, setPokemonSearchTerm] = useState('');
+  const [pokemonSortMode, setPokemonSortMode] = useState('entry');
+  const [pokemonMetadata, setPokemonMetadata] = useState({});
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [typeChart, setTypeChart] = useState({});
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingTeamMember, setLoadingTeamMember] = useState(false);
+  const [error, setError] = useState('');
+
+  const activeVersionGroup = getTeamVersionGroup(selectedDex);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    Promise.all(
+      TYPE_NAMES.map((typeName) =>
+        fetch(`${POKEAPI_BASE_URL}/type/${typeName}`, { signal: controller.signal })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('Unable to load Pokemon type chart.');
+            }
+            return response.json();
+          })
+          .then((typeData) => [typeName, typeData]),
+      ),
+    )
+      .then((entries) => {
+        setTypeChart(Object.fromEntries(entries));
+      })
+      .catch((fetchError) => {
+        if (fetchError.name !== 'AbortError') {
+          setError(fetchError.message);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const pokedexIds =
+      selectedDex === ALL_POKEDEX_OPTION.id
+        ? POKEDEX_OPTIONS.map((pokedex) => pokedex.id)
+        : [selectedDex];
+
+    Promise.all(
+      pokedexIds.map((pokedexId) =>
+        fetch(`${POKEAPI_BASE_URL}/pokedex/${pokedexId}`, { signal: controller.signal })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('Unable to load this Pokedex.');
+            }
+            return response.json();
+          }),
+      ),
+    )
+      .then((data) => {
+        setPokemonList(buildPokedexEntries(data, selectedDex === ALL_POKEDEX_OPTION.id));
+      })
+      .catch((fetchError) => {
+        if (fetchError.name !== 'AbortError') {
+          setError(fetchError.message);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingList(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedDex]);
+
+  useEffect(() => {
+    if (!POKEDEX_METADATA_SORTS.has(pokemonSortMode) || !pokemonList.length) {
+      return undefined;
+    }
+
+    const missingPokemon = pokemonList.filter((pokemon) => !pokemonMetadata[pokemon.name]);
+
+    if (!missingPokemon.length) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    const loadMetadata = async () => {
+      const loadedEntries = [];
+      const batchSize = 20;
+
+      for (let index = 0; index < missingPokemon.length; index += batchSize) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const batch = missingPokemon.slice(index, index + batchSize);
+        const metadataBatch = await Promise.all(
+          batch.map((pokemon) => fetchPokemonListMetadata(pokemon, { signal: controller.signal })),
+        );
+        loadedEntries.push(...metadataBatch);
+      }
+
+      if (!controller.signal.aborted) {
+        setPokemonMetadata((previousMetadata) => ({
+          ...previousMetadata,
+          ...Object.fromEntries(loadedEntries.map((metadata) => [metadata.name, metadata])),
+        }));
+      }
+    };
+
+    loadMetadata()
+      .catch((fetchError) => {
+        if (fetchError.name !== 'AbortError') {
+          setError(fetchError.message);
+        }
+      });
+
+    return () => controller.abort();
+  }, [pokemonList, pokemonMetadata, pokemonSortMode]);
+
+  const visiblePokemon = useMemo(() => {
+    const normalizedSearch = pokemonSearchTerm.trim().toLowerCase();
+    const filteredPokemon = normalizedSearch
+      ? pokemonList.filter((pokemon) => (
+          pokemon.name.includes(normalizedSearch) ||
+          String(pokemon.entryNumber).includes(normalizedSearch)
+        ))
+      : pokemonList;
+
+    const compareByEntry = (firstPokemon, secondPokemon) =>
+      firstPokemon.entryNumber - secondPokemon.entryNumber ||
+      firstPokemon.name.localeCompare(secondPokemon.name);
+
+    return [...filteredPokemon].sort((firstPokemon, secondPokemon) => {
+      const firstMetadata = pokemonMetadata[firstPokemon.name];
+      const secondMetadata = pokemonMetadata[secondPokemon.name];
+
+      if (pokemonSortMode === 'name') {
+        return firstPokemon.name.localeCompare(secondPokemon.name);
+      }
+
+      if (pokemonSortMode === 'type') {
+        return (
+          (firstMetadata?.primaryType || '').localeCompare(secondMetadata?.primaryType || '') ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      if (pokemonSortMode === 'legendary') {
+        return (
+          Number(Boolean(secondMetadata?.isLegendary)) -
+            Number(Boolean(firstMetadata?.isLegendary)) ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      if (pokemonSortMode.startsWith('stat-')) {
+        const statName = pokemonSortMode.replace('stat-', '');
+        return (
+          (secondMetadata?.stats?.[statName] || 0) -
+            (firstMetadata?.stats?.[statName] || 0) ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      return compareByEntry(firstPokemon, secondPokemon);
+    });
+  }, [pokemonList, pokemonMetadata, pokemonSearchTerm, pokemonSortMode]);
+
+  const pokemonSortOptions = useMemo(
+    () => [
+      { value: 'entry', label: 'Pokedex Number' },
+      { value: 'name', label: 'Name' },
+      { value: 'type', label: 'Type' },
+      { value: 'legendary', label: 'Legendary' },
+      ...STAT_SORT_OPTIONS.map((stat) => ({
+        value: `stat-${stat.id}`,
+        label: stat.label,
+      })),
+    ],
+    [],
+  );
+  const loadingPokemonMetadata =
+    POKEDEX_METADATA_SORTS.has(pokemonSortMode) &&
+    pokemonList.some((pokemon) => !pokemonMetadata[pokemon.name]);
+
+  const moveTypeCoverage = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(typeChart).map(([typeName, typeData]) => [
+          typeName,
+          typeData.damage_relations.double_damage_to.map((type) => type.name),
+        ]),
+      ),
+    [typeChart],
+  );
+
+  const buildTeamMember = useCallback((pokemonName) =>
+    fetchPokemonByNameOrSpecies(pokemonName)
+      .then((pokemon) => {
+        const levelUpMoves = getLevelUpMovesForVersionGroup(pokemon, activeVersionGroup);
+        const limitedMoves = levelUpMoves.slice(0, 80);
+
+        return Promise.all(
+          limitedMoves.map((move) =>
+            fetch(move.url)
+              .then((response) => {
+                if (!response.ok) {
+                  throw new Error('Unable to load move details.');
+                }
+                return response.json();
+              })
+              .then((moveData) => ({
+                ...move,
+                type: moveData.type.name,
+                damageClass: moveData.damage_class.name,
+                power: moveData.power,
+              })),
+          ),
+        ).then((availableMoves) => ({ pokemon, availableMoves }));
+      })
+      .then(({ pokemon, availableMoves }) => {
+        const pokemonTypes = pokemon.types.map(({ type }) => type.name);
+        const typeData = pokemonTypes.map((typeName) => typeChart[typeName]).filter(Boolean);
+        const stats = Object.fromEntries(
+          pokemon.stats.map((stat) => [stat.stat.name, stat.base_stat]),
+        );
+
+        return {
+          id: `${pokemon.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          pokemonId: pokemon.id,
+          name: pokemon.name,
+          sprite: pokemon.sprites.front_default,
+          artwork: pokemon.sprites.other?.['official-artwork']?.front_default,
+          types: pokemonTypes,
+          stats,
+          availableMoves,
+          selectedMoves: availableMoves.slice(0, 4).map((move) => move.name),
+          defenseMultipliers: getTypeMultiplierMap(typeData),
+          moveTypeCoverage,
+        };
+      }), [activeVersionGroup, moveTypeCoverage, typeChart]);
+
+  const addPokemonToTeam = useCallback((pokemonName) => {
+    if (teamMembers.length >= 6 || loadingTeamMember || !Object.keys(typeChart).length) {
+      return;
+    }
+
+    setLoadingTeamMember(true);
+    setError('');
+
+    buildTeamMember(pokemonName)
+      .then((teamMember) => {
+        setTeamMembers((previousMembers) => [...previousMembers, teamMember].slice(0, 6));
+      })
+      .catch((fetchError) => {
+        setError(fetchError.message);
+      })
+      .finally(() => setLoadingTeamMember(false));
+  }, [buildTeamMember, loadingTeamMember, teamMembers.length, typeChart]);
+
+  const randomizeTeam = useCallback(() => {
+    if (loadingList || loadingTeamMember || !pokemonList.length || !Object.keys(typeChart).length) {
+      return;
+    }
+
+    setLoadingTeamMember(true);
+    setError('');
+
+    const shuffledPokemon = [...pokemonList].sort(() => Math.random() - 0.5).slice(0, 6);
+
+    Promise.all(shuffledPokemon.map((pokemon) => buildTeamMember(pokemon.name)))
+      .then((team) => {
+        setTeamMembers(team);
+      })
+      .catch((fetchError) => {
+        setError(fetchError.message);
+      })
+      .finally(() => setLoadingTeamMember(false));
+  }, [buildTeamMember, loadingList, loadingTeamMember, pokemonList, typeChart]);
+
+  const updateTeamMove = (memberId, moveIndex, moveName) => {
+    setTeamMembers((previousMembers) =>
+      previousMembers.map((member) => {
+        if (member.id !== memberId) return member;
+
+        const nextMoves = [...member.selectedMoves];
+        nextMoves[moveIndex] = moveName;
+
+        return {
+          ...member,
+          selectedMoves: nextMoves,
+        };
+      }),
+    );
+  };
+
+  const removeTeamMember = (memberId) => {
+    setTeamMembers((previousMembers) =>
+      previousMembers.filter((member) => member.id !== memberId),
+    );
+  };
+
+  const clearTeam = () => {
+    setTeamMembers([]);
+  };
+
+  const teamMatchups = useMemo(
+    () => summarizeTeamTypeMatchups(teamMembers),
+    [teamMembers],
+  );
+  const teamWeaknesses = teamMatchups
+    .filter((matchup) => matchup.weak)
+    .sort((first, second) => second.weak - first.weak || first.type.localeCompare(second.type));
+  const teamResistances = teamMatchups
+    .filter((matchup) => matchup.resist || matchup.immune)
+    .sort((first, second) =>
+      (second.resist + second.immune) - (first.resist + first.immune) ||
+      first.type.localeCompare(second.type),
+    );
+  const teamCoverage = useMemo(
+    () => summarizeTeamMoveCoverage(teamMembers),
+    [teamMembers],
+  );
+  const strongAgainstTypes = teamCoverage.map((coverage) => coverage.type);
+  const averageStats = useMemo(
+    () => getTeamAverageStats(teamMembers),
+    [teamMembers],
+  );
+
+  return (
+    <div className="app-container team-planner-page">
+      <header className="app-header">
+        <button type="button" className="brand-mark brand-home-button" onClick={onBack}>
+          <span className="nes-pokeball brand-pokeball" aria-hidden="true" />
+          <h1>Pokemon Team Planner</h1>
+        </button>
+        <StationNav
+          activeStation="team"
+          onNavigate={(station) => {
+            const handlers = {
+              home: onBack,
+              pokedex: onOpenPokedex,
+              tcg: onOpenTcg,
+              who: onOpenWhos,
+              quiz: onOpenQuiz,
+            };
+            handlers[station]?.();
+          }}
+        />
+      </header>
+
+      <section className="team-planner-layout">
+        <aside className="team-control-panel">
+          <label htmlFor="team-game-select">Game Pokedex</label>
+          <select
+            id="team-game-select"
+            value={selectedDex}
+            onChange={(event) => {
+              setSelectedDex(event.target.value);
+              setLoadingList(true);
+              setError('');
+              setPokemonList([]);
+              setPokemonSearchTerm('');
+              setPokemonSortMode('entry');
+              setTeamMembers([]);
+            }}
+          >
+            {TEAM_POKEDEX_OPTIONS.map((pokedex) => (
+              <option key={pokedex.id} value={pokedex.id}>
+                {pokedex.label}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="team-pokemon-search">Pokemon</label>
+          <input
+            id="team-pokemon-search"
+            type="search"
+            value={pokemonSearchTerm}
+            onChange={(event) => setPokemonSearchTerm(event.target.value)}
+            placeholder="Filter by name or number..."
+          />
+
+          <label htmlFor="team-pokemon-sort">Sort Pokemon</label>
+          <select
+            id="team-pokemon-sort"
+            value={pokemonSortMode}
+            onChange={(event) => setPokemonSortMode(event.target.value)}
+            disabled={loadingList}
+          >
+            {pokemonSortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <p className="team-count-badge">{teamMembers.length}/6 selected</p>
+          {loadingPokemonMetadata && (
+            <p className="pokedex-status">Loading Pokemon sort data...</p>
+          )}
+
+          <div className="team-action-row">
+            <button
+              type="button"
+              className="nes-btn is-primary"
+              onClick={randomizeTeam}
+              disabled={loadingList || loadingTeamMember || !pokemonList.length || !Object.keys(typeChart).length}
+            >
+              Randomize Team
+            </button>
+            <button
+              type="button"
+              className="nes-btn is-error"
+              onClick={clearTeam}
+              disabled={!teamMembers.length || loadingTeamMember}
+            >
+              Remove All
+            </button>
+          </div>
+
+          {error && <p className="pokedex-error">{error}</p>}
+
+          <div className="team-pokemon-list" aria-label="Pokemon team choices">
+            {loadingList && <p className="pokedex-status">Loading Pokemon...</p>}
+            {!loadingList && visiblePokemon.map((pokemon) => (
+              <button
+                key={pokemon.name}
+                type="button"
+                className="pokemon-list-item nes-btn"
+                onClick={() => addPokemonToTeam(pokemon.name)}
+                disabled={teamMembers.length >= 6 || loadingTeamMember || !Object.keys(typeChart).length}
+              >
+                <span>#{String(pokemon.entryNumber).padStart(3, '0')}</span>
+                <img src={getPokemonSpriteUrl(pokemon.pokemonId)} alt="" aria-hidden="true" loading="lazy" />
+                <strong>{formatPokemonName(pokemon.name)}</strong>
+              </button>
+            ))}
+            {!loadingList && !visiblePokemon.length && (
+              <p className="pokedex-status">No Pokemon match this search.</p>
+            )}
+          </div>
+        </aside>
+
+        <main className="team-builder-panel">
+          <section className="team-slot-grid" aria-label="Team slots">
+            {teamMembers.map((member) => (
+              <article key={member.id} className="team-member-card">
+                <button
+                  type="button"
+                  className="team-remove-button nes-btn is-error"
+                  onClick={() => removeTeamMember(member.id)}
+                  aria-label={`Remove ${formatPokemonName(member.name)}`}
+                >
+                  Remove
+                </button>
+                <div className="team-member-heading">
+                  <img
+                    src={member.artwork || member.sprite || getPokemonSpriteUrl(member.pokemonId)}
+                    alt={formatPokemonName(member.name)}
+                    loading="lazy"
+                  />
+                  <div>
+                    <p className="card-detail-set">#{String(member.pokemonId).padStart(3, '0')}</p>
+                    <h2>{formatPokemonName(member.name)}</h2>
+                    <div className="type-row">
+                      {member.types.map((typeName) => (
+                        <span key={typeName} className={`type-badge type-${typeName}`}>
+                          <img src={TYPE_ICONS[typeName]} alt="" aria-hidden="true" />
+                          {typeName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="team-move-grid">
+                  {Array.from({ length: 4 }, (_, moveIndex) => (
+                    <label key={moveIndex}>
+                      Move {moveIndex + 1}
+                      <select
+                        value={member.selectedMoves[moveIndex] || ''}
+                        onChange={(event) => updateTeamMove(member.id, moveIndex, event.target.value)}
+                      >
+                        <option value="">Empty Slot</option>
+                        {member.availableMoves.map((move) => (
+                          <option key={`${move.level}-${move.name}`} value={move.name}>
+                            Lv. {move.level} - {formatPokemonName(move.name)} ({formatPokemonName(move.type)})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </article>
+            ))}
+
+            {Array.from({ length: Math.max(6 - teamMembers.length, 0) }, (_, index) => (
+              <article key={`empty-${index}`} className="team-member-card is-empty">
+                <span>{teamMembers.length + index + 1}</span>
+              </article>
+            ))}
+          </section>
+
+          <section className="team-analysis-grid">
+            <article className="team-analysis-card">
+              <h2>Weaknesses</h2>
+              <div className="team-type-list">
+                {teamWeaknesses.map((matchup) => (
+                  <span key={matchup.type} className={`type-badge type-${matchup.type}`}>
+                    {formatPokemonName(matchup.type)} x{matchup.weak}
+                  </span>
+                ))}
+                {!teamWeaknesses.length && <p className="pokedex-status">Add Pokemon to scan team weaknesses.</p>}
+              </div>
+            </article>
+
+            <article className="team-analysis-card">
+              <h2>Resistances</h2>
+              <div className="team-type-list">
+                {teamResistances.map((matchup) => (
+                  <span key={matchup.type} className={`type-badge type-${matchup.type}`}>
+                    {formatPokemonName(matchup.type)} {matchup.immune ? `immune ${matchup.immune}` : `resist ${matchup.resist}`}
+                  </span>
+                ))}
+                {!teamResistances.length && <p className="pokedex-status">No resistances yet.</p>}
+              </div>
+            </article>
+
+            <article className="team-analysis-card">
+              <h2>Strong Against</h2>
+              <div className="team-type-list">
+                {strongAgainstTypes.map((typeName) => (
+                  <span key={typeName} className={`type-badge type-${typeName}`}>
+                    {formatPokemonName(typeName)}
+                  </span>
+                ))}
+                {!strongAgainstTypes.length && <p className="pokedex-status">Choose moves to see offensive strengths.</p>}
+              </div>
+            </article>
+
+            <article className="team-analysis-card team-stat-card">
+              <h2>Average Stats</h2>
+              <div className="team-stat-list">
+                {averageStats.map((stat) => (
+                  <div key={stat.id}>
+                    <span>{stat.label}</span>
+                    <meter min="0" max="255" value={stat.value} />
+                    <strong>{stat.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        </main>
+      </section>
+    </div>
+  );
+}
+
+function PokemonQuizStation({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOpenTeam }) {
+  const [selectedDex, setSelectedDex] = useState(ALL_POKEDEX_OPTION.id);
+  const [selectedCategory, setSelectedCategory] = useState('mixed');
+  const [pokemonList, setPokemonList] = useState([]);
+  const [typeChart, setTypeChart] = useState({});
+  const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [selectedAnswer, setSelectedAnswer] = useState('');
+  const [score, setScore] = useState(0);
+  const [roundCount, setRoundCount] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [autoContinue, setAutoContinue] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
+  const [error, setError] = useState('');
+  const [isCryPlaying, setIsCryPlaying] = useState(false);
+  const quizAudioRef = useRef(null);
+  const autoContinueTimerRef = useRef(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    Promise.all(
+      TYPE_NAMES.map((typeName) =>
+        fetch(`${POKEAPI_BASE_URL}/type/${typeName}`, { signal: controller.signal })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('Unable to load Pokemon quiz type chart.');
+            }
+            return response.json();
+          })
+          .then((typeData) => [typeName, typeData]),
+      ),
+    )
+      .then((entries) => {
+        setTypeChart(Object.fromEntries(entries));
+      })
+      .catch((fetchError) => {
+        if (fetchError.name !== 'AbortError') {
+          setError(fetchError.message);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const pokedexIds =
+      selectedDex === ALL_POKEDEX_OPTION.id
+        ? POKEDEX_OPTIONS.map((pokedex) => pokedex.id)
+        : [selectedDex];
+
+    Promise.all(
+      pokedexIds.map((pokedexId) =>
+        fetch(`${POKEAPI_BASE_URL}/pokedex/${pokedexId}`, { signal: controller.signal })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('Unable to load quiz Pokedex.');
+            }
+            return response.json();
+          }),
+      ),
+    )
+      .then((data) => {
+        setPokemonList(buildPokedexEntries(data, selectedDex === ALL_POKEDEX_OPTION.id));
+      })
+      .catch((fetchError) => {
+        if (fetchError.name !== 'AbortError') {
+          setError(fetchError.message);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoadingList(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [selectedDex]);
+
+  useEffect(
+    () => () => {
+      if (quizAudioRef.current) {
+        quizAudioRef.current.pause();
+        quizAudioRef.current = null;
+      }
+      setIsCryPlaying(false);
+      clearTimeout(autoContinueTimerRef.current);
+    },
+    [],
+  );
+
+  const resetQuiz = () => {
+    setScore(0);
+    setRoundCount(0);
+    setStreak(0);
+    setSelectedAnswer('');
+    setCurrentQuestion(null);
+    setIsCryPlaying(false);
+  };
+
+  const startNextQuestion = useCallback(() => {
+    if (loadingList || !pokemonList.length || !Object.keys(typeChart).length) {
+      return;
+    }
+
+    clearTimeout(autoContinueTimerRef.current);
+    if (quizAudioRef.current) {
+      quizAudioRef.current.pause();
+      quizAudioRef.current = null;
+    }
+    setIsCryPlaying(false);
+    setLoadingQuestion(true);
+    setSelectedAnswer('');
+    setError('');
+
+    const tryBuildQuestion = (attempt = 0) =>
+      buildPokemonQuizQuestion({
+        category: selectedCategory,
+        pokemonList,
+        selectedDex,
+        typeChart,
+      }).catch((buildError) => {
+        if (attempt >= 4) {
+          throw buildError;
+        }
+        return tryBuildQuestion(attempt + 1);
+      });
+
+    tryBuildQuestion()
+      .then((question) => {
+        setCurrentQuestion(question);
+      })
+      .catch((fetchError) => {
+        setError(fetchError.message);
+      })
+      .finally(() => setLoadingQuestion(false));
+  }, [loadingList, pokemonList, selectedCategory, selectedDex, typeChart]);
+
+  const answerQuestion = (answer) => {
+    if (!currentQuestion || selectedAnswer) {
+      return;
+    }
+
+    setSelectedAnswer(answer);
+    setRoundCount((previousCount) => previousCount + 1);
+
+    if (answer === currentQuestion.answer) {
+      setScore((previousScore) => previousScore + 1);
+      setStreak((previousStreak) => previousStreak + 1);
+      if (autoContinue) {
+        autoContinueTimerRef.current = setTimeout(() => {
+          startNextQuestion();
+        }, 1200);
+      }
+      return;
+    }
+
+    setStreak(0);
+    if (autoContinue) {
+      autoContinueTimerRef.current = setTimeout(() => {
+        startNextQuestion();
+      }, 1600);
+    }
+  };
+
+  const playQuizCry = () => {
+    const cryUrl = currentQuestion?.visual?.cryUrl;
+    if (!cryUrl) return;
+
+    if (quizAudioRef.current) {
+      quizAudioRef.current.pause();
+      quizAudioRef.current.currentTime = 0;
+    }
+
+    const audio = new Audio(cryUrl);
+    quizAudioRef.current = audio;
+    const stopCryEffect = () => {
+      if (quizAudioRef.current === audio) {
+        setIsCryPlaying(false);
+      }
+    };
+
+    audio.addEventListener('ended', stopCryEffect, { once: true });
+    audio.addEventListener('pause', stopCryEffect, { once: true });
+    audio.addEventListener('error', stopCryEffect, { once: true });
+    audio.play()
+      .then(() => {
+        setIsCryPlaying(true);
+      })
+      .catch(() => {
+        setIsCryPlaying(false);
+        setError('Pokemon cry could not be played.');
+      });
+  };
+
+  const renderQuizVisual = () => {
+    const visual = currentQuestion?.visual;
+    if (!visual) {
+      return (
+        <div className="quiz-visual-placeholder">
+          <span>?</span>
+        </div>
+      );
+    }
+
+    if (visual.kind === 'entry') {
+      return <blockquote className="quiz-entry-card">{visual.text}</blockquote>;
+    }
+
+    if (visual.kind === 'cry') {
+      return (
+        <div className={`quiz-cry-card ${isCryPlaying ? 'is-playing' : ''}`}>
+          <span className="quiz-cry-pulse" aria-hidden="true">
+            <span className="nes-pokeball" />
+          </span>
+          <button
+            type="button"
+            className="nes-btn is-primary quiz-cry-button"
+            onClick={playQuizCry}
+            aria-live="polite"
+          >
+            {isCryPlaying ? 'Playing...' : 'Play Cry'}
+          </button>
+        </div>
+      );
+    }
+
+    if (visual.kind === 'versus') {
+      return (
+        <div className="quiz-versus-card">
+          <div>
+            <img src={visual.firstImage} alt="" aria-hidden="true" />
+            <span>{visual.firstName}</span>
+          </div>
+          <strong>VS</strong>
+          <div>
+            <img src={visual.secondImage} alt="" aria-hidden="true" />
+            <span>{visual.secondName}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (visual.kind === 'move') {
+      return (
+        <div className="quiz-move-card">
+          <strong>{visual.moveName}</strong>
+          <span>{visual.moveClass} move</span>
+        </div>
+      );
+    }
+
+    if (visual.kind === 'sprite-line' || visual.kind === 'art-line') {
+      return (
+        <div className={visual.kind === 'art-line' ? 'quiz-art-line' : 'quiz-sprite-line'}>
+          {visual.images
+            .map((image) => (typeof image === 'string' ? { image, fallback: '' } : image))
+            .filter((image) => image?.image || image?.fallback)
+            .map((image, index) => (
+              <img
+                key={`${image.image || image.fallback}-${index}`}
+                src={image.image || image.fallback}
+                data-fallback-src={image.fallback || ''}
+                alt=""
+                aria-hidden="true"
+                onError={(event) => {
+                  const fallbackSrc = event.currentTarget.dataset.fallbackSrc;
+                  if (fallbackSrc && event.currentTarget.src !== fallbackSrc) {
+                    event.currentTarget.src = fallbackSrc;
+                    event.currentTarget.removeAttribute('data-fallback-src');
+                  }
+                }}
+              />
+            ))}
+        </div>
+      );
+    }
+
+    if (visual.kind === 'sprite') {
+      return (
+        <div className="quiz-art-card">
+          <img src={visual.image} alt="" aria-hidden="true" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="quiz-art-card is-silhouette">
+        {visual.image ? <img src={visual.image} alt="" aria-hidden="true" /> : <span>?</span>}
+      </div>
+    );
+  };
+
+  const activeDex = TEAM_POKEDEX_OPTIONS.find((pokedex) => pokedex.id === selectedDex);
+  const answeredCorrectly = selectedAnswer && selectedAnswer === currentQuestion?.answer;
+  const answeredIncorrectly = selectedAnswer && selectedAnswer !== currentQuestion?.answer;
+
+  return (
+    <div className="app-container quiz-page">
+      <header className="app-header">
+        <button type="button" className="brand-mark brand-home-button" onClick={onBack}>
+          <span className="nes-pokeball brand-pokeball" aria-hidden="true" />
+          <h1>Pokemon Quiz</h1>
+        </button>
+        <StationNav
+          activeStation="quiz"
+          onNavigate={(station) => {
+            const handlers = {
+              home: onBack,
+              pokedex: onOpenPokedex,
+              tcg: onOpenTcg,
+              who: onOpenWhos,
+              team: onOpenTeam,
+            };
+            handlers[station]?.();
+          }}
+        />
+      </header>
+
+      <section className="quiz-layout">
+        <aside className="quiz-control-panel">
+          <label htmlFor="quiz-pokedex-select">Quiz Pool</label>
+          <select
+            id="quiz-pokedex-select"
+            value={selectedDex}
+            onChange={(event) => {
+              setSelectedDex(event.target.value);
+              setLoadingList(true);
+              setCurrentQuestion(null);
+              setSelectedAnswer('');
+              setScore(0);
+              setRoundCount(0);
+              setStreak(0);
+            }}
+          >
+            {TEAM_POKEDEX_OPTIONS.map((pokedex) => (
+              <option key={pokedex.id} value={pokedex.id}>
+                {pokedex.label}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="quiz-category-select">Category</label>
+          <select
+            id="quiz-category-select"
+            value={selectedCategory}
+            onChange={(event) => {
+              setSelectedCategory(event.target.value);
+              setCurrentQuestion(null);
+              setSelectedAnswer('');
+            }}
+          >
+            {QUIZ_CATEGORY_OPTIONS.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.label}
+              </option>
+            ))}
+          </select>
+
+          <dl className="quiz-score-card">
+            <div>
+              <dt>Score</dt>
+              <dd>{score}</dd>
+            </div>
+            <div>
+              <dt>Rounds</dt>
+              <dd>{roundCount}</dd>
+            </div>
+            <div>
+              <dt>Streak</dt>
+              <dd>{streak}</dd>
+            </div>
+          </dl>
+
+          <label className="quiz-toggle">
+            <input
+              type="checkbox"
+              checked={autoContinue}
+              onChange={(event) => setAutoContinue(event.target.checked)}
+            />
+            Auto continue
+          </label>
+
+          <div className="quiz-control-actions">
+            <button
+              type="button"
+              className="nes-btn is-success"
+              onClick={startNextQuestion}
+              disabled={loadingList || loadingQuestion || !pokemonList.length || !Object.keys(typeChart).length}
+            >
+              {currentQuestion ? 'Next Question' : 'Start Quiz'}
+            </button>
+            <button type="button" className="nes-btn" onClick={resetQuiz} disabled={!roundCount && !currentQuestion}>
+              Reset
+            </button>
+          </div>
+
+          <p className="quiz-pool-note">
+            {loadingList ? 'Loading quiz pool...' : `${activeDex?.label || 'Quiz'}: ${pokemonList.length} Pokemon`}
+          </p>
+          {error && <p className="pokedex-error">{error}</p>}
+        </aside>
+
+        <main className="quiz-stage-panel">
+          <div className="quiz-stage-topline">
+            <p className="card-detail-set">{currentQuestion?.category || 'Quiz Terminal'}</p>
+            <span>{selectedCategory === 'mixed' ? 'Mixed mode' : QUIZ_CATEGORY_OPTIONS.find((category) => category.id === selectedCategory)?.label}</span>
+          </div>
+
+          <section className="quiz-question-card">
+            {loadingQuestion && (
+              <div className="quiz-loading-state">
+                <div className="pack-loader-ball" aria-hidden="true" />
+                <p>Drawing a new question...</p>
+              </div>
+            )}
+
+            {!loadingQuestion && currentQuestion && (
+              <>
+                <div className="quiz-visual-stage">
+                  {renderQuizVisual()}
+                </div>
+                <h2>{currentQuestion.prompt}</h2>
+                <div className="quiz-answer-grid">
+                  {currentQuestion.choices.map((choice) => {
+                    const isCorrect = selectedAnswer && choice === currentQuestion.answer;
+                    const isWrong = selectedAnswer === choice && choice !== currentQuestion.answer;
+                    return (
+                      <button
+                        key={choice}
+                        type="button"
+                        className={`nes-btn quiz-answer-button ${
+                          isCorrect ? 'is-success' : isWrong ? 'is-error' : ''
+                        }`}
+                        onClick={() => answerQuestion(choice)}
+                        disabled={Boolean(selectedAnswer)}
+                      >
+                        {choice}
+                      </button>
+                    );
+                  })}
+                </div>
+                {answeredCorrectly && <p className="quiz-result is-correct">Correct.</p>}
+                {answeredIncorrectly && (
+                  <p className="quiz-result is-wrong">
+                    Wrong. Answer: {currentQuestion.answer}
+                  </p>
+                )}
+              </>
+            )}
+
+            {!loadingQuestion && !currentQuestion && (
+              <div className="quiz-empty-state">
+                <span className="nes-pokeball" aria-hidden="true" />
+                <h2>Ready Check</h2>
+                <p>Choose a pool and category, then start the quiz.</p>
+              </div>
+            )}
+          </section>
+        </main>
+      </section>
+    </div>
   );
 }
 
@@ -2658,7 +4422,7 @@ function EvolutionBranch({ node, onChoosePokemon }) {
   );
 }
 
-function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
+function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) {
   const [pokemonList, setPokemonList] = useState([]);
   const [selectedDex, setSelectedDex] = useState(ALL_POKEDEX_OPTION.id);
   const [selectedPokemon, setSelectedPokemon] = useState(null);
@@ -2673,6 +4437,8 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
   const [tcgCards, setTcgCards] = useState([]);
   const [loadingTcgCards, setLoadingTcgCards] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pokemonSortMode, setPokemonSortMode] = useState('entry');
+  const [pokemonMetadata, setPokemonMetadata] = useState({});
   const [loadingList, setLoadingList] = useState(true);
   const [loadingPokemon, setLoadingPokemon] = useState(false);
   const [error, setError] = useState('');
@@ -2712,6 +4478,53 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
 
     return () => controller.abort();
   }, [selectedDex]);
+
+  useEffect(() => {
+    if (!POKEDEX_METADATA_SORTS.has(pokemonSortMode) || !pokemonList.length) {
+      return undefined;
+    }
+
+    const missingPokemon = pokemonList.filter((pokemon) => !pokemonMetadata[pokemon.name]);
+
+    if (!missingPokemon.length) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    const loadMetadata = async () => {
+      const loadedEntries = [];
+      const batchSize = 20;
+
+      for (let index = 0; index < missingPokemon.length; index += batchSize) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const batch = missingPokemon.slice(index, index + batchSize);
+        const metadataBatch = await Promise.all(
+          batch.map((pokemon) => fetchPokemonListMetadata(pokemon, { signal: controller.signal })),
+        );
+        loadedEntries.push(...metadataBatch);
+      }
+
+      if (!controller.signal.aborted) {
+        setPokemonMetadata((previousMetadata) => ({
+          ...previousMetadata,
+          ...Object.fromEntries(loadedEntries.map((metadata) => [metadata.name, metadata])),
+        }));
+      }
+    };
+
+    loadMetadata()
+      .catch((fetchError) => {
+        if (fetchError.name !== 'AbortError') {
+          setError(fetchError.message);
+        }
+      });
+
+    return () => controller.abort();
+  }, [pokemonList, pokemonMetadata, pokemonSortMode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -2983,14 +4796,80 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
 
   const visiblePokemon = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    if (!normalizedSearch) return pokemonList;
+    const filteredPokemon = normalizedSearch
+      ? pokemonList.filter((pokemon) => (
+          pokemon.name.includes(normalizedSearch) ||
+          String(pokemon.entryNumber).includes(normalizedSearch)
+        ))
+      : pokemonList;
 
-    return pokemonList
-      .filter((pokemon) => (
-        pokemon.name.includes(normalizedSearch) ||
-        String(pokemon.entryNumber).includes(normalizedSearch)
-      ));
-  }, [pokemonList, searchTerm]);
+    const compareByEntry = (firstPokemon, secondPokemon) =>
+      firstPokemon.entryNumber - secondPokemon.entryNumber ||
+      firstPokemon.name.localeCompare(secondPokemon.name);
+
+    return [...filteredPokemon].sort((firstPokemon, secondPokemon) => {
+      const firstMetadata = pokemonMetadata[firstPokemon.name];
+      const secondMetadata = pokemonMetadata[secondPokemon.name];
+
+      if (pokemonSortMode === 'name') {
+        return firstPokemon.name.localeCompare(secondPokemon.name);
+      }
+
+      if (pokemonSortMode === 'type') {
+        return (
+          (firstMetadata?.primaryType || '').localeCompare(secondMetadata?.primaryType || '') ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      if (pokemonSortMode === 'legendary') {
+        return (
+          Number(Boolean(secondMetadata?.isLegendary)) -
+            Number(Boolean(firstMetadata?.isLegendary)) ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      if (pokemonSortMode === 'generation') {
+        return (
+          (firstMetadata?.generationOrder || Number.MAX_SAFE_INTEGER) -
+            (secondMetadata?.generationOrder || Number.MAX_SAFE_INTEGER) ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      if (pokemonSortMode.startsWith('stat-')) {
+        const statName = pokemonSortMode.replace('stat-', '');
+        return (
+          (secondMetadata?.stats?.[statName] || 0) -
+            (firstMetadata?.stats?.[statName] || 0) ||
+          compareByEntry(firstPokemon, secondPokemon)
+        );
+      }
+
+      return compareByEntry(firstPokemon, secondPokemon);
+    });
+  }, [pokemonList, pokemonMetadata, pokemonSortMode, searchTerm]);
+
+  const pokedexSortOptions = useMemo(
+    () => [
+      { value: 'entry', label: 'Pokedex Number' },
+      { value: 'name', label: 'Name' },
+      { value: 'type', label: 'Type' },
+      { value: 'legendary', label: 'Legendary' },
+      ...(selectedDex === ALL_POKEDEX_OPTION.id
+        ? [{ value: 'generation', label: 'Generation' }]
+        : []),
+      ...STAT_SORT_OPTIONS.map((stat) => ({
+        value: `stat-${stat.id}`,
+        label: stat.label,
+      })),
+    ],
+    [selectedDex],
+  );
+  const loadingPokemonMetadata =
+    POKEDEX_METADATA_SORTS.has(pokemonSortMode) &&
+    pokemonList.some((pokemon) => !pokemonMetadata[pokemon.name]);
 
   const pokedexChoices = [ALL_POKEDEX_OPTION, ...POKEDEX_OPTIONS];
   const activeDex = pokedexChoices.find((pokedex) => pokedex.id === selectedDex);
@@ -3069,18 +4948,19 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
           <span className="nes-pokeball brand-pokeball" aria-hidden="true" />
           <h1>Pokedex</h1>
         </button>
-        <div className="header-actions">
-          <button type="button" className="nes-btn nav-button" onClick={onBack}>
-            Home
-          </button>
-          <button type="button" className="nes-btn nav-button" onClick={onOpenTcg}>
-            TCG
-          </button>
-          <button type="button" className="nes-btn nav-button" onClick={onOpenWhos}>
-            Who's That?
-          </button>
-          <GitHubRepoLink />
-        </div>
+        <StationNav
+          activeStation="pokedex"
+          onNavigate={(station) => {
+            const handlers = {
+              home: onBack,
+              tcg: onOpenTcg,
+              who: onOpenWhos,
+              team: onOpenTeam,
+              quiz: onOpenQuiz,
+            };
+            handlers[station]?.();
+          }}
+        />
       </header>
 
       <section className="pokedex-layout">
@@ -3103,6 +4983,11 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
                   }`}
                   onClick={() => {
                     setSelectedDex(pokedex.id);
+                    setPokemonSortMode((currentSortMode) =>
+                      currentSortMode === 'generation' && pokedex.id !== ALL_POKEDEX_OPTION.id
+                        ? 'entry'
+                        : currentSortMode,
+                    );
                     setSearchTerm('');
                     setError('');
                     setPokemonList([]);
@@ -3175,6 +5060,28 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos }) {
               Clear
             </button>
           </div>
+
+          <div className="pokedex-filter-row">
+            <label htmlFor="pokemon-sort">Sort Pokemon</label>
+            <select
+              id="pokemon-sort"
+              value={pokemonSortMode}
+              onChange={(event) => {
+                const nextSortMode = event.target.value;
+                setPokemonSortMode(nextSortMode);
+              }}
+              disabled={loadingList}
+            >
+              {pokedexSortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {loadingPokemonMetadata && (
+            <p className="pokedex-status">Loading Pokemon sort data...</p>
+          )}
 
           {error && <p className="pokedex-error">{error}</p>}
 
@@ -3857,6 +5764,8 @@ function App() {
         onBack={() => setActiveView('home')}
         onOpenTcg={() => setActiveView('tcg')}
         onOpenWhos={() => setActiveView('who')}
+        onOpenTeam={() => setActiveView('team')}
+        onOpenQuiz={() => setActiveView('quiz')}
       />
     );
   }
@@ -3867,6 +5776,8 @@ function App() {
         onBack={() => setActiveView('home')}
         onOpenPokedex={() => setActiveView('pokedex')}
         onOpenWhos={() => setActiveView('who')}
+        onOpenTeam={() => setActiveView('team')}
+        onOpenQuiz={() => setActiveView('quiz')}
       />
     );
   }
@@ -3877,6 +5788,32 @@ function App() {
         onBack={() => setActiveView('home')}
         onOpenPokedex={() => setActiveView('pokedex')}
         onOpenTcg={() => setActiveView('tcg')}
+        onOpenTeam={() => setActiveView('team')}
+        onOpenQuiz={() => setActiveView('quiz')}
+      />
+    );
+  }
+
+  if (activeView === 'team') {
+    return (
+      <PokemonTeamPlanner
+        onBack={() => setActiveView('home')}
+        onOpenPokedex={() => setActiveView('pokedex')}
+        onOpenTcg={() => setActiveView('tcg')}
+        onOpenWhos={() => setActiveView('who')}
+        onOpenQuiz={() => setActiveView('quiz')}
+      />
+    );
+  }
+
+  if (activeView === 'quiz') {
+    return (
+      <PokemonQuizStation
+        onBack={() => setActiveView('home')}
+        onOpenPokedex={() => setActiveView('pokedex')}
+        onOpenTcg={() => setActiveView('tcg')}
+        onOpenWhos={() => setActiveView('who')}
+        onOpenTeam={() => setActiveView('team')}
       />
     );
   }

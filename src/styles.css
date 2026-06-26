@@ -254,6 +254,7 @@ h2 {
 
 .brand-mark {
   display: flex;
+  flex: 1 1 auto;
   gap: 14px;
   align-items: center;
   min-width: 0;
@@ -301,8 +302,12 @@ button.brand-home-button:focus-visible {
 }
 
 .brand-mark h1 {
+  min-width: 0;
   margin-bottom: 0;
-  white-space: nowrap;
+  font-size: clamp(1.35rem, 2.8vw, 2.7rem);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .nes-pokeball {
@@ -328,8 +333,156 @@ button.brand-home-button:focus-visible {
 .header-actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 12px;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.station-menu-button.nes-btn {
+  min-width: 132px;
+  min-height: 52px;
+  margin-bottom: 0;
+  padding-inline: 18px;
+  color: #212529;
+  background-color: #ffffff;
+}
+
+.station-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.station-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  padding: 0;
+  background:
+    repeating-linear-gradient(0deg, rgb(5 5 5 / 5%) 0 2px, transparent 2px 8px),
+    rgb(247 243 248 / 58%);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.station-menu-scrim:hover:not(:disabled),
+.station-menu-scrim:active:not(:disabled),
+.station-menu-scrim:focus-visible {
+  background:
+    repeating-linear-gradient(0deg, rgb(5 5 5 / 5%) 0 2px, transparent 2px 8px),
+    rgb(247 243 248 / 58%);
+  box-shadow: none;
+  transform: none;
+}
+
+.station-menu-panel {
+  position: relative;
+  z-index: 41;
+  display: grid;
+  gap: 10px;
+  width: min(420px, 100%);
+  border: var(--gb-frame-width) solid transparent;
+  border-image: var(--gb-frame) var(--gb-frame-slice) round;
+  padding: 14px 18px;
+  color: #050505;
+  background: rgb(255 250 255 / 94%);
+  background-clip: border-box;
+  box-shadow:
+    inset 0 0 0 4px rgb(255 255 255 / 88%),
+    8px 8px 0 rgb(33 37 41 / 28%);
+  image-rendering: pixelated;
+}
+
+.station-menu-heading {
+  display: none;
+}
+
+.station-menu-heading p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.station-menu-heading h2 {
+  margin: 0;
+  color: #050505;
+  font-size: clamp(1.2rem, 3vw, 1.9rem);
+  line-height: 1.25;
+}
+
+.station-menu-close.nes-btn {
+  min-width: 48px;
+  min-height: 44px;
+  padding: 6px 10px;
+}
+
+.station-menu-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.station-menu-option.nes-btn {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  border: var(--gb-frame-compact-width) solid transparent;
+  border-image: var(--gb-frame-compact) var(--gb-frame-compact-slice) round;
+  padding: 3px 12px;
+  color: #212529;
+  background: rgb(255 250 255 / 88%);
+  background-clip: border-box;
+  box-shadow:
+    inset -4px -4px 0 #b7bac6,
+    inset 4px 4px 0 #ffffff;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.station-menu-option.nes-btn::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-block: 6px solid transparent;
+  border-left: 9px solid transparent;
+}
+
+.station-menu-option.nes-btn:hover:not(:disabled),
+.station-menu-option.nes-btn:active:not(:disabled),
+.station-menu-option.nes-btn:focus-visible {
+  background: rgb(255 250 255 / 92%);
+  box-shadow:
+    inset -4px -4px 0 #b7bac6,
+    inset 4px 4px 0 #ffffff;
+  transform: none;
+}
+
+.station-menu-option.is-active {
+  color: #050505;
+  background: rgb(255 250 255 / 92%);
+}
+
+.station-menu-option.is-active::before,
+.station-menu-option.nes-btn:hover:not(:disabled)::before,
+.station-menu-option.nes-btn:focus-visible::before {
+  border-left-color: #212529;
+}
+
+.station-menu-option strong {
+  display: none;
 }
 
 .control-panel {
@@ -1353,7 +1506,7 @@ button.brand-home-button:focus-visible {
 
 .choice-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 18px;
 }
 
@@ -1397,6 +1550,728 @@ button.brand-home-button:focus-visible {
   font-weight: 800;
   line-height: 1.55;
   opacity: 0.92;
+}
+
+.choice-card.quiz-choice-card,
+.choice-card.quiz-choice-card:hover:not(:disabled),
+.choice-card.quiz-choice-card:focus-visible {
+  color: #e3350d;
+  background-color: #ffffff;
+}
+
+.choice-card.quiz-choice-card::after {
+  box-shadow: inset -4px -4px #e3350d;
+}
+
+.choice-card.quiz-choice-card:hover:not(:disabled)::after,
+.choice-card.quiz-choice-card:focus-visible::after {
+  box-shadow: inset -6px -6px #e3350d;
+}
+
+.choice-card.quiz-choice-card .choice-icon {
+  color: #ffffff;
+  background: #e3350d;
+}
+
+.team-planner-page.app-container {
+  width: min(1680px, calc(100% - 24px));
+}
+
+.team-planner-page .app-header {
+  background: linear-gradient(#49a35b 0 48%, #212529 48% 56%, #ffffff 56% 100%);
+  background-clip: padding-box;
+}
+
+.team-planner-page .brand-mark h1 {
+  color: #ffffff;
+  text-shadow:
+    2px 2px 0 #212529,
+    -2px 2px 0 #212529,
+    2px -2px 0 #212529,
+    -2px -2px 0 #212529;
+}
+
+.team-planner-layout {
+  display: grid;
+  grid-template-columns: minmax(340px, 0.34fr) minmax(720px, 0.66fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.team-control-panel,
+.team-builder-panel,
+.team-analysis-card {
+  border: var(--gb-frame-width) solid transparent;
+  border-image: var(--gb-frame) var(--gb-frame-slice) round;
+  background: #ffffff;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 4px #ffffff;
+  image-rendering: pixelated;
+}
+
+.team-control-panel,
+.team-builder-panel {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.team-control-panel {
+  background:
+    linear-gradient(#e7f8df, #ffffff 210px),
+    #ffffff;
+}
+
+.team-control-panel select,
+.team-control-panel input,
+.team-move-grid select {
+  margin-bottom: 0;
+}
+
+.team-count-badge {
+  width: fit-content;
+  margin: 0;
+  border: 4px solid #212529;
+  padding: 8px;
+  color: #050505;
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.team-action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.team-action-row .nes-btn {
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 8px;
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.team-pokemon-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  max-height: 820px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.team-pokemon-list .pokemon-list-item.nes-btn {
+  grid-template-columns: auto 72px minmax(0, 1fr);
+  min-height: 96px;
+}
+
+.team-pokemon-list .pokemon-list-item img {
+  width: 72px;
+  height: 72px;
+}
+
+.team-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.team-member-card {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  min-height: 338px;
+  border: 4px solid #212529;
+  padding: 16px;
+  color: #050505;
+  background: #ffffff;
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff;
+}
+
+.team-member-card.is-empty {
+  place-items: center;
+  color: #555555;
+  background:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 7%) 0 2px, transparent 2px 8px),
+    #f4f4f4;
+}
+
+.team-member-card.is-empty span {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 4px solid #212529;
+  background: #ffffff;
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.team-remove-button.nes-btn {
+  justify-self: end;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 0.64rem;
+}
+
+.team-member-heading {
+  display: grid;
+  grid-template-columns: 164px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.team-member-heading > img {
+  width: 164px;
+  height: 164px;
+  object-fit: contain;
+}
+
+.team-member-heading h2 {
+  margin: 0 0 8px;
+  color: #050505;
+  text-transform: capitalize;
+}
+
+.team-member-heading .type-row {
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.team-member-heading .type-row span {
+  gap: 6px;
+  border-width: 3px;
+  padding: 5px 8px;
+  font-size: 0.84rem;
+}
+
+.team-member-heading .type-badge img {
+  width: 18px;
+  height: 18px;
+}
+
+.team-move-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.team-move-grid label {
+  min-width: 0;
+  margin-bottom: 0;
+  font-size: 0.72rem;
+}
+
+.team-move-grid select {
+  min-width: 0;
+  font-size: 0.72rem;
+}
+
+.team-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.team-analysis-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-height: 240px;
+  padding: 20px;
+}
+
+.team-analysis-card h2 {
+  margin: 0;
+  color: #050505;
+}
+
+.team-type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.team-type-list .type-badge {
+  display: inline-flex;
+  border: 4px solid #212529;
+  padding: 6px 10px;
+  color: #050505;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.team-stat-card {
+  align-items: stretch;
+}
+
+.team-stat-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.team-stat-list div {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 44px;
+  gap: 12px;
+  align-items: center;
+  border: 4px solid #212529;
+  padding: 8px 10px;
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.team-stat-list span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
+.team-stat-list strong {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.team-stat-list meter {
+  width: 100%;
+  height: 18px;
+}
+
+.team-stat-list meter::-webkit-meter-bar {
+  border: 3px solid #212529;
+  background: #ffffff;
+}
+
+.team-stat-list meter::-webkit-meter-optimum-value {
+  background: #92cc41;
+}
+
+.quiz-page.app-container {
+  --quiz-blue: #209cee;
+  --quiz-blue-dark: #006bb3;
+  --quiz-yellow: #f7d51d;
+  --quiz-pink: #ff8fab;
+
+  width: min(1500px, calc(100% - 24px));
+}
+
+.quiz-page .app-header {
+  background: linear-gradient(#209cee 0 48%, #212529 48% 56%, #ffffff 56% 100%);
+  background-clip: padding-box;
+}
+
+.quiz-page .brand-mark h1 {
+  color: #ffffff;
+  text-shadow:
+    2px 2px 0 #212529,
+    -2px 2px 0 #212529,
+    2px -2px 0 #212529,
+    -2px -2px 0 #212529;
+}
+
+.quiz-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.32fr) minmax(640px, 0.68fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.quiz-control-panel,
+.quiz-stage-panel,
+.quiz-question-card {
+  border: var(--gb-frame-width) solid transparent;
+  border-image: var(--gb-frame) var(--gb-frame-slice) round;
+  background: #ffffff;
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 4px #ffffff;
+  image-rendering: pixelated;
+}
+
+.quiz-control-panel,
+.quiz-stage-panel {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.quiz-control-panel {
+  background:
+    linear-gradient(145deg, #dff1ff 0 42%, #fff8d8 42% 72%, #ffffff 72%),
+    #ffffff;
+}
+
+.quiz-control-panel select {
+  margin-bottom: 0;
+}
+
+.quiz-score-card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.quiz-score-card div,
+.quiz-pool-note {
+  border: 4px solid #212529;
+  padding: 10px;
+  background: #fff8d8;
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff;
+}
+
+.quiz-score-card div:nth-child(1) {
+  background: #dff6d7;
+}
+
+.quiz-score-card div:nth-child(2) {
+  background: #dff1ff;
+}
+
+.quiz-score-card div:nth-child(3) {
+  background: #ffe3ec;
+}
+
+.quiz-score-card dt {
+  color: #555555;
+  font-size: 0.64rem;
+  font-weight: 900;
+}
+
+.quiz-score-card dd {
+  margin: 4px 0 0;
+  color: #050505;
+  font-size: 1.3rem;
+  font-weight: 900;
+}
+
+.quiz-control-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.quiz-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 0;
+  border: 4px solid #212529;
+  padding: 10px 12px;
+  color: #050505;
+  background: #ffffff;
+  box-shadow:
+    inset -4px -4px 0 #adafbc,
+    inset 4px 4px 0 #ffffff;
+  cursor: pointer;
+}
+
+.quiz-toggle input {
+  width: 22px;
+  min-height: 22px;
+  margin: 0;
+  box-shadow: none;
+}
+
+.quiz-pool-note {
+  margin: 0;
+  color: #050505;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.quiz-stage-topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.quiz-stage-topline p,
+.quiz-stage-topline span {
+  margin: 0;
+}
+
+.quiz-stage-topline span {
+  color: var(--quiz-blue-dark);
+  font-weight: 900;
+}
+
+.quiz-question-card {
+  display: grid;
+  gap: 18px;
+  min-height: 620px;
+  padding: 26px;
+  background:
+    linear-gradient(#ffffff 0 64%, #dff1ff 64% 100%),
+    #ffffff;
+}
+
+.quiz-question-card h2 {
+  margin: 0;
+  color: #050505;
+  font-size: clamp(1.25rem, 2.6vw, 2.2rem);
+  line-height: 1.18;
+}
+
+.quiz-visual-stage,
+.quiz-empty-state,
+.quiz-loading-state {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  border: 4px solid #212529;
+  padding: 18px;
+  background:
+    repeating-linear-gradient(0deg, rgb(32 156 238 / 10%) 0 2px, transparent 2px 7px),
+    radial-gradient(circle at center, #ffffff 0 28%, #dff1ff 70%),
+    #dff1ff;
+}
+
+.quiz-art-card,
+.quiz-cry-card,
+.quiz-versus-card,
+.quiz-move-card,
+.quiz-sprite-line,
+.quiz-visual-placeholder {
+  display: grid;
+  gap: 12px;
+  place-items: center;
+  color: #050505;
+  font-weight: 900;
+  text-align: center;
+}
+
+.quiz-art-card img {
+  width: min(280px, 64vw);
+  height: 240px;
+  object-fit: contain;
+}
+
+.quiz-art-card.is-silhouette img {
+  filter: brightness(0);
+}
+
+.quiz-visual-placeholder span,
+.quiz-empty-state .nes-pokeball {
+  width: 92px;
+}
+
+.quiz-entry-card {
+  max-width: 62ch;
+  margin: 0;
+  border: 4px solid #212529;
+  padding: 22px;
+  color: #050505;
+  background: #fff8d8;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1.65;
+}
+
+.quiz-cry-card .nes-pokeball {
+  width: 112px;
+}
+
+.quiz-cry-pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 150px;
+  height: 138px;
+}
+
+.quiz-cry-pulse::before,
+.quiz-cry-pulse::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 54px;
+  background:
+    linear-gradient(#209cee 0 0) 0 0 / 100% 10px no-repeat,
+    linear-gradient(#209cee 0 0) 0 22px / 100% 10px no-repeat,
+    linear-gradient(#209cee 0 0) 0 44px / 100% 10px no-repeat;
+  opacity: 0;
+  transform: translateY(-50%) scaleX(0.4);
+}
+
+.quiz-cry-pulse::before {
+  left: 8px;
+  --cry-wave-offset: -8px;
+}
+
+.quiz-cry-pulse::after {
+  right: 8px;
+  --cry-wave-offset: 8px;
+}
+
+.quiz-cry-card.is-playing .quiz-cry-pulse .nes-pokeball {
+  animation: quizCryBounce 520ms steps(2, end) infinite;
+}
+
+.quiz-cry-card.is-playing .quiz-cry-pulse::before,
+.quiz-cry-card.is-playing .quiz-cry-pulse::after {
+  animation: quizCryWave 680ms steps(3, end) infinite;
+}
+
+.quiz-cry-card.is-playing .quiz-cry-pulse::after {
+  animation-delay: 120ms;
+}
+
+.quiz-cry-button.nes-btn {
+  min-width: 152px;
+}
+
+.quiz-cry-card.is-playing .quiz-cry-button.nes-btn {
+  color: #050505;
+  background: #f7d51d;
+  transform: translate(2px, 2px);
+  box-shadow:
+    inset -4px -4px 0 #e59400,
+    inset 4px 4px 0 #fff8d8,
+    2px 2px 0 rgb(0 0 0 / 38%);
+}
+
+@keyframes quizCryBounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-6px) rotate(-4deg);
+  }
+}
+
+@keyframes quizCryWave {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(0) scaleX(0.4);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(var(--cry-wave-offset, 0)) scaleX(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(var(--cry-wave-offset, 0)) scaleX(1.35);
+  }
+}
+
+.quiz-versus-card {
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr);
+  width: min(680px, 100%);
+}
+
+.quiz-versus-card div {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+}
+
+.quiz-versus-card img {
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+}
+
+.quiz-versus-card strong {
+  font-size: 1.4rem;
+}
+
+.quiz-move-card {
+  min-width: min(360px, 100%);
+  border: 4px solid #212529;
+  padding: 28px;
+  background: linear-gradient(135deg, #fff8d8, #dff1ff);
+}
+
+.quiz-move-card strong {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+}
+
+.quiz-sprite-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.quiz-art-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 22px;
+}
+
+.quiz-sprite-line img {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.quiz-art-line img {
+  width: min(190px, 36vw);
+  height: 180px;
+  object-fit: contain;
+}
+
+.quiz-answer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  border: 4px solid #212529;
+  padding: 14px;
+  background: #e8f4ff;
+}
+
+.quiz-answer-button.nes-btn {
+  width: 100%;
+  min-height: 70px;
+  padding: 10px 14px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.quiz-result {
+  margin: 0;
+  border: 4px solid #212529;
+  padding: 12px;
+  font-weight: 900;
+}
+
+.quiz-result.is-correct {
+  background: #dff6d7;
+}
+
+.quiz-result.is-wrong {
+  color: #ffffff;
+  background: #e76e55;
+}
+
+.quiz-empty-state {
+  gap: 16px;
+  color: #050505;
+  text-align: center;
+}
+
+.quiz-empty-state h2,
+.quiz-empty-state p,
+.quiz-loading-state p {
+  margin: 0;
 }
 
 .pokedex-layout {
@@ -1718,6 +2593,16 @@ button.brand-home-button:focus-visible {
 }
 
 .pokedex-search-row input {
+  margin-bottom: 0;
+}
+
+.pokedex-filter-row {
+  display: grid;
+  gap: 8px;
+}
+
+.pokedex-filter-row label,
+.pokedex-filter-row select {
   margin-bottom: 0;
 }
 
@@ -3148,40 +4033,92 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
   inset: 0;
   z-index: 80;
   display: grid;
-  justify-items: end;
+  place-items: center;
   padding: 22px;
-  background: rgb(0 0 0 / 42%);
-  backdrop-filter: blur(4px);
+  background:
+    repeating-linear-gradient(0deg, rgb(5 5 5 / 5%) 0 2px, transparent 2px 8px),
+    rgb(247 243 248 / 58%);
 }
 
 .who-menu-panel {
   position: relative;
   display: grid;
   align-content: start;
-  gap: 18px;
-  width: min(560px, 100%);
+  gap: 10px;
+  width: min(420px, 100%);
   max-height: calc(100vh - 44px);
   overflow: auto;
   border: var(--gb-frame-width) solid transparent;
   border-image: var(--gb-frame) var(--gb-frame-slice) round;
-  padding: 30px;
+  padding: 14px 18px;
   color: #050505;
-  background:
-    linear-gradient(#fff8d8, #ffffff 260px),
-    #ffffff;
-  box-shadow: inset 0 0 0 4px #ffffff;
+  background: rgb(255 250 255 / 94%);
+  background-clip: border-box;
+  box-shadow:
+    inset 0 0 0 4px rgb(255 255 255 / 88%),
+    8px 8px 0 rgb(33 37 41 / 28%);
   image-rendering: pixelated;
 }
 
-.who-menu-panel .modal-close.nes-btn {
-  top: 12px;
-  right: 12px;
+.who-start-menu-title {
+  margin: 0;
+  color: #050505;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
-.who-menu-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+.who-start-menu-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.who-start-menu-list button {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  border: var(--gb-frame-compact-width) solid transparent;
+  border-image: var(--gb-frame-compact) var(--gb-frame-compact-slice) round;
+  padding: 3px 12px;
+  background: rgb(255 250 255 / 88%);
+  background-clip: border-box;
+  box-shadow:
+    inset -4px -4px 0 #b7bac6,
+    inset 4px 4px 0 #ffffff;
+  text-align: left;
+}
+
+.who-start-menu-list button::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-block: 6px solid transparent;
+  border-left: 9px solid transparent;
+}
+
+.who-start-menu-list button:hover:not(:disabled),
+.who-start-menu-list button:active:not(:disabled),
+.who-start-menu-list button:focus-visible {
+  background: rgb(255 250 255 / 92%);
+  box-shadow:
+    inset -4px -4px 0 #b7bac6,
+    inset 4px 4px 0 #ffffff;
+  transform: none;
+}
+
+.who-start-menu-list button:hover:not(:disabled)::before,
+.who-start-menu-list button:focus-visible::before {
+  border-left-color: #212529;
+}
+
+.who-menu-panel .who-score-panel {
+  border-top: 4px double #212529;
+  padding-top: 14px;
 }
 
 .who-entry-overlay {
@@ -3556,6 +4493,11 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
   .choice-grid,
   .pokedex-layout,
   .pokedex-card,
+  .team-planner-layout,
+  .team-slot-grid,
+  .team-analysis-grid,
+  .quiz-layout,
+  .quiz-answer-grid,
   .who-setup-layout,
   .who-layout,
   .who-play-shell,
@@ -3607,6 +4549,29 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
 
   .app-header {
     flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .station-menu-button.nes-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .station-menu-overlay {
+    align-items: end;
+    padding: 16px;
+  }
+
+  .station-menu-panel {
+    width: 100%;
+    padding: 18px;
+  }
+
+  .station-menu-list {
+    grid-template-columns: 1fr;
   }
 
   .brand-mark h1,
@@ -3713,6 +4678,20 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
 
   .pokemon-list {
     grid-template-columns: 1fr;
+  }
+
+  .team-pokemon-list,
+  .team-action-row,
+  .team-move-grid,
+  .team-member-heading,
+  .quiz-score-card,
+  .quiz-control-actions,
+  .quiz-versus-card {
+    grid-template-columns: 1fr;
+  }
+
+  .team-member-heading > img {
+    justify-self: center;
   }
 
   .pokedex-search-row .nes-btn {
