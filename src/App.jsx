@@ -1312,7 +1312,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
   const [isPreparingPack, setIsPreparingPack] = useState(false);
   const [isAutoRevealing, setIsAutoRevealing] = useState(false);
   const [selectedCard, setSelectedCard] = useState(null);
-  const [showClearBinderDialog, setShowClearBinderDialog] = useState(false);
+  const [showClearBinderDialog, setShowClearBinderDialog] = useState(null);
   const [collection, setCollection] = useState(loadCollection);
   const [loading, setLoading] = useState(true);
   const revealTimersRef = useRef([]);
@@ -1328,7 +1328,12 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
   );
   
   useEffect(() => {
-    localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(collection));
+    if (Object.keys(collection).length) {
+      localStorage.setItem(COLLECTION_STORAGE_KEY, JSON.stringify(collection));
+      return;
+    }
+
+    localStorage.removeItem(COLLECTION_STORAGE_KEY);
   }, [collection]);
 
   useEffect(() => {
@@ -1496,14 +1501,27 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
     addPackToBinder(nextPack);
   };
 
-  const clearBinder = () => {
-    setShowClearBinderDialog(true);
+  const clearAllBinders = () => {
+    setShowClearBinderDialog('all');
   };
 
   const confirmClearBinder = () => {
-    setCollection({});
-    localStorage.removeItem(COLLECTION_STORAGE_KEY);
-    setShowClearBinderDialog(false);
+    if (showClearBinderDialog === 'set') {
+      const activeSetCardIds = new Set(activeSetCards.map((card) => card.id));
+      setCollection((prevCollection) =>
+        Object.fromEntries(
+          Object.entries(prevCollection).filter(([cardId]) => !activeSetCardIds.has(cardId)),
+        ),
+      );
+    } else {
+      setCollection({});
+    }
+
+    setShowClearBinderDialog(null);
+  };
+
+  const clearActiveSetBinder = () => {
+    setShowClearBinderDialog('set');
   };
 
   const expansionEntries = useMemo(
@@ -1538,6 +1556,15 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
     ? Math.round((ownedActiveSetCards.length / activeSetCards.length) * 100)
     : 0;
   const progressLevel = binderProgress >= 75 ? 'good' : binderProgress >= 35 ? 'mid' : 'low';
+  const hasCollectionCards = Object.keys(collection).length > 0;
+  const clearDialogIsForSet = showClearBinderDialog === 'set';
+  const clearDialogTitle = clearDialogIsForSet ? 'Clear This Binder?' : 'Clear All Binders?';
+  const clearDialogMessage = clearDialogIsForSet
+    ? `This will remove ${ownedActiveSetCards.length} owned card${
+        ownedActiveSetCards.length === 1 ? '' : 's'
+      } from ${activeSet?.setName || 'the selected set'} only.`
+    : 'This will remove every card from every binder collection.';
+  const clearDialogButtonLabel = clearDialogIsForSet ? 'Clear This Binder' : 'Clear All Binders';
 
   const openBinderCard = (card) => {
     setSelectedCard({
@@ -1635,14 +1662,28 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
         </div>
 
         <label htmlFor="set-search">Search expansion sets</label>
-        <input
-          id="set-search"
-          type="search"
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Search by set name..."
-          disabled={loading}
-        />
+        <div className="search-with-clear">
+          <input
+            id="set-search"
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by set name..."
+            disabled={loading}
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              className="search-clear-button"
+              onClick={() => setSearchTerm('')}
+              disabled={loading}
+              aria-label="Clear expansion search"
+              title="Clear expansion search"
+            >
+              x
+            </button>
+          )}
+        </div>
 
         <label htmlFor="set-sort">Sort sets</label>
         <select
@@ -1718,13 +1759,6 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
           >
             Open God Pack
           </button>
-          <button
-            onClick={clearBinder}
-            disabled={!Object.keys(collection).length}
-            className="btn btn-danger nes-btn is-error"
-          >
-            Clear Binder
-          </button>
         </div>
       </div>
 
@@ -1737,9 +1771,29 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
               {ownedActiveSetCards.length} / {activeSetCards.length} unique cards
             </p>
           </div>
-          <strong className={`binder-progress progress-label-${progressLevel}`}>
-            {binderProgress}%
-          </strong>
+          <div className="binder-header-actions">
+            <strong className={`binder-progress progress-label-${progressLevel}`}>
+              {binderProgress}%
+            </strong>
+            <div className="binder-clear-actions" aria-label="Binder clear actions">
+              <button
+                type="button"
+                onClick={clearActiveSetBinder}
+                disabled={!ownedActiveSetCards.length}
+                className="btn btn-danger nes-btn is-error"
+              >
+                Clear This Binder
+              </button>
+              <button
+                type="button"
+                onClick={clearAllBinders}
+                disabled={!hasCollectionCards}
+                className="btn btn-danger nes-btn is-error"
+              >
+                Clear All Binders
+              </button>
+            </div>
+          </div>
         </div>
         <div className="progress-track" aria-hidden="true">
           <div
@@ -1748,13 +1802,26 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
           />
         </div>
         <label htmlFor="binder-search">Search binder cards</label>
-        <input
-          id="binder-search"
-          type="search"
-          value={binderSearchTerm}
-          onChange={(event) => setBinderSearchTerm(event.target.value)}
-          placeholder="Search Pokemon in this set..."
-        />
+        <div className="search-with-clear">
+          <input
+            id="binder-search"
+            type="text"
+            value={binderSearchTerm}
+            onChange={(event) => setBinderSearchTerm(event.target.value)}
+            placeholder="Search Pokemon in this set..."
+          />
+          {binderSearchTerm && (
+            <button
+              type="button"
+              className="search-clear-button"
+              onClick={() => setBinderSearchTerm('')}
+              aria-label="Clear binder search"
+              title="Clear binder search"
+            >
+              x
+            </button>
+          )}
+        </div>
         <div className="binder-grid">
           {visibleBinderCards.map((card) => {
             const ownedCard = collection[card.id];
@@ -1796,7 +1863,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
         <div
           className="clear-dialog-overlay"
           role="presentation"
-          onClick={() => setShowClearBinderDialog(false)}
+          onClick={() => setShowClearBinderDialog(null)}
         >
           <div
             className="clear-dialog"
@@ -1805,13 +1872,13 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
             aria-labelledby="clear-dialog-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 id="clear-dialog-title">Clear Binder?</h2>
-            <p>This will remove every card from your binder collection.</p>
+            <h2 id="clear-dialog-title">{clearDialogTitle}</h2>
+            <p>{clearDialogMessage}</p>
             <div className="clear-dialog-actions">
               <button
                 type="button"
                 className="nes-btn"
-                onClick={() => setShowClearBinderDialog(false)}
+                onClick={() => setShowClearBinderDialog(null)}
               >
                 Cancel
               </button>
@@ -1820,7 +1887,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
                 className="btn btn-danger nes-btn is-error"
                 onClick={confirmClearBinder}
               >
-                Clear Binder
+                {clearDialogButtonLabel}
               </button>
             </div>
           </div>

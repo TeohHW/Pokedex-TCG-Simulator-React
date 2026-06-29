@@ -123,6 +123,58 @@ input:focus-visible {
   outline-offset: 3px;
 }
 
+.search-with-clear {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.search-with-clear input {
+  margin-bottom: 0;
+  padding-right: 52px;
+}
+
+.search-clear-button {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: #264f8b;
+  background: transparent;
+  font: inherit;
+  font-size: 1.15rem;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+  box-shadow: none;
+}
+
+.search-clear-button:hover:not(:disabled),
+.search-clear-button:focus-visible {
+  color: #050505;
+  background: #f7d51d;
+  transform: translateY(-50%);
+  box-shadow: none;
+}
+
+.search-clear-button:active:not(:disabled) {
+  background: #f2c409;
+  transform: translateY(-50%);
+  box-shadow: none;
+}
+
+.search-clear-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 code {
   border-radius: 4px;
   padding: 2px 5px;
@@ -501,12 +553,12 @@ button.brand-home-button:focus-visible {
 .button-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .button-group .btn-god {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .btn-god {
@@ -1076,6 +1128,19 @@ button.brand-home-button:focus-visible {
   gap: 16px;
   align-items: flex-start;
   justify-content: space-between;
+}
+
+.binder-header-actions {
+  display: grid;
+  gap: 12px;
+  justify-items: end;
+}
+
+.binder-clear-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .binder-header h2 {
@@ -4284,10 +4349,6 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
   box-shadow: inset -6px -6px #adafbc;
 }
 
-.button-group .btn-god.nes-btn {
-  margin-left: auto;
-}
-
 .nes-btn:disabled,
 .nes-btn:disabled:hover,
 .nes-btn.is-disabled,
@@ -4581,6 +4642,26 @@ button.who-pokemon-button:focus-visible:not(:disabled) {
 
   .home-screen {
     padding: 18px;
+  }
+
+  .button-group,
+  .binder-header,
+  .binder-clear-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .button-group .nes-btn,
+  .binder-clear-actions .nes-btn {
+    width: 100%;
+  }
+
+  .binder-header-actions {
+    justify-items: stretch;
+  }
+
+  .binder-progress {
+    justify-self: start;
   }
 
   .home-brand {
