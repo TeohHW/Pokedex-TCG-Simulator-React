@@ -285,6 +285,45 @@ const normalizePokemonName = (name = '') =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
+const normalizeSearchText = (value = '') =>
+  String(value)
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const compactSearchText = (value = '') => normalizeSearchText(value).replace(/\s+/g, '');
+
+const POKEMON_LOOKUP_ALIASES = {
+  farfetchd: 'farfetchd',
+  sirfetchd: 'sirfetchd',
+  'mr mime': 'mr-mime',
+  mrmime: 'mr-mime',
+  'mime jr': 'mime-jr',
+  mimejr: 'mime-jr',
+  'type null': 'type-null',
+  typenull: 'type-null',
+  'ho oh': 'ho-oh',
+  hooh: 'ho-oh',
+  'porygon z': 'porygon-z',
+  porygonz: 'porygon-z',
+  'jangmo o': 'jangmo-o',
+  jangmoo: 'jangmo-o',
+  'hakamo o': 'hakamo-o',
+  hakamoo: 'hakamo-o',
+  'kommo o': 'kommo-o',
+  kommoo: 'kommo-o',
+  'nidoran f': 'nidoran-f',
+  nidoranf: 'nidoran-f',
+  'nidoran female': 'nidoran-f',
+  nidoranfemale: 'nidoran-f',
+  'nidoran m': 'nidoran-m',
+  nidoranm: 'nidoran-m',
+  'nidoran male': 'nidoran-m',
+  nidoranmale: 'nidoran-m',
+};
+
 const POKEMON_SEARCH_VALIDATION_MESSAGE = 'Please enter a valid Pokemon name or National Dex number.';
 
 const getPokemonLookupValidationError = (pokemonName = '') => {
@@ -302,7 +341,7 @@ const getPokemonLookupValidationError = (pokemonName = '') => {
     return Number(searchValue) > 0 ? '' : POKEMON_SEARCH_VALIDATION_MESSAGE;
   }
 
-  return /^[a-z0-9]+(?:[ -]+[a-z0-9]+)*$/i.test(searchValue)
+  return /^[a-z0-9]+(?:[ '\-.♀♂]+[a-z0-9]+)*[♀♂]?$/i.test(searchValue)
     ? ''
     : POKEMON_SEARCH_VALIDATION_MESSAGE;
 };
@@ -365,11 +404,18 @@ const fetchPokemonListMetadata = (pokemonEntry, options = {}) =>
     );
 
 const normalizePokemonLookup = (pokemonName = '') =>
-  String(pokemonName)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+  {
+    const searchKey = normalizeSearchText(
+      String(pokemonName)
+        .replace(/♀/g, ' f')
+        .replace(/♂/g, ' m'),
+    );
+    const compactSearchKey = searchKey.replace(/\s+/g, '');
+
+    return POKEMON_LOOKUP_ALIASES[searchKey] ||
+      POKEMON_LOOKUP_ALIASES[compactSearchKey] ||
+      searchKey.replace(/\s+/g, '-');
+  };
 
 const fetchPokemonByNameOrSpecies = (pokemonName, options = {}) => {
   const validationError = getPokemonLookupValidationError(pokemonName);
@@ -1209,23 +1255,59 @@ const getGenerationSprites = (pokemon) => {
 
 const getFeaturedTcgCards = (cards, pokemonNames) => {
   const normalizedPokemonNames = [...new Set([pokemonNames].flat())]
-    .map((pokemonName) => normalizePokemonName(pokemonName))
+    .map((pokemonName) => compactSearchText(pokemonName))
     .filter(Boolean);
 
   if (!normalizedPokemonNames.length) return [];
 
   return cards.filter((card) => {
-    const normalizedCardName = normalizePokemonName(card.name);
-    const cardTokens = normalizedCardName.split(' ');
+    const normalizedCardName = normalizeSearchText(card.name);
+    const compactCardName = compactSearchText(card.name);
+    const cardTokens = normalizedCardName.split(' ').map((token) => compactSearchText(token));
 
     return normalizedPokemonNames.some((normalizedPokemon) => (
-      normalizedCardName === normalizedPokemon ||
-      normalizedCardName.includes(` ${normalizedPokemon} `) ||
-      normalizedCardName.startsWith(`${normalizedPokemon} `) ||
-      normalizedCardName.endsWith(` ${normalizedPokemon}`) ||
+      compactCardName === normalizedPokemon ||
+      compactCardName.endsWith(normalizedPokemon) ||
       cardTokens.includes(normalizedPokemon)
     ));
   });
+};
+
+const cardMatchesSearch = (card, searchValue = '') => {
+  const normalizedSearch = normalizeSearchText(searchValue);
+  const compactSearch = compactSearchText(searchValue);
+
+  if (!normalizedSearch) return true;
+
+  const searchableFields = [
+    card.name,
+    card.evolvesFrom,
+    ...(card.types || []),
+    ...(card.subtypes || []),
+  ];
+
+  return searchableFields.some((field) => {
+    const normalizedField = normalizeSearchText(field);
+    const compactField = compactSearchText(field);
+
+    return (
+      normalizedField.includes(normalizedSearch) ||
+      compactField.includes(compactSearch)
+    );
+  });
+};
+
+const expansionHasCardMatch = (expansion, searchValue = '') => {
+  if (!normalizeSearchText(searchValue)) return true;
+
+  return [...(expansion?.commons || []), ...(expansion?.uncommons || []), ...(expansion?.rares || [])]
+    .some((card) => cardMatchesSearch(card, searchValue));
+};
+
+const parseReleaseDate = (releaseDate = '') => {
+  const normalizedDate = releaseDate.replaceAll('/', '-');
+  const timestamp = Date.parse(`${normalizedDate}T00:00:00`);
+  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
 };
 
 const getCardFaceImage = (card) => card.largeImage || card.image;
@@ -1372,6 +1454,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
   const revealTimersRef = useRef([]);
   const prepTimerRef = useRef(null);
   const revealDelayRef = useRef(CARD_FLIP_DELAY);
+  const binderPanelRef = useRef(null);
 
   useEffect(
     () => () => {
@@ -1499,9 +1582,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
   const openRandomPack = () => {
     if (loading || !allExpansions) return;
 
-    const playableSets = Object.entries(allExpansions).filter(([, expansion]) =>
-      hasPlayableCards(expansion),
-    );
+    const playableSets = releasedPlayableExpansionEntries;
     const [randomSetId, randomSet] = randomItem(playableSets) || [];
 
     if (!randomSetId || !randomSet) {
@@ -1582,6 +1663,22 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
     () => (allExpansions ? Object.entries(allExpansions) : []),
     [allExpansions],
   );
+  const releasedPlayableExpansionEntries = useMemo(() => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    return expansionEntries.filter(([, expansion]) =>
+      hasPlayableCards(expansion) && parseReleaseDate(expansion.releaseDate) <= today.getTime(),
+    );
+  }, [expansionEntries]);
+  const latestReleasedExpansion = useMemo(
+    () =>
+      [...releasedPlayableExpansionEntries]
+        .sort(([, firstExpansion], [, secondExpansion]) =>
+          parseReleaseDate(secondExpansion.releaseDate) - parseReleaseDate(firstExpansion.releaseDate),
+        )[0]?.[1],
+    [releasedPlayableExpansionEntries],
+  );
 
   const activeSet = allExpansions?.[selectedSet];
   const selectedSetIsPlayable = hasPlayableCards(activeSet);
@@ -1599,13 +1696,25 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
   }, [activeSet]);
   const ownedActiveSetCards = activeSetCards.filter((card) => collection[card.id]);
   const visibleBinderCards = useMemo(() => {
-    const normalizedSearch = binderSearchTerm.trim().toLowerCase();
-    if (!normalizedSearch) return activeSetCards;
+    if (!normalizeSearchText(binderSearchTerm)) return activeSetCards;
 
-    return activeSetCards.filter((card) =>
-      card.name.toLowerCase().includes(normalizedSearch),
-    );
+    return activeSetCards.filter((card) => cardMatchesSearch(card, binderSearchTerm));
   }, [activeSetCards, binderSearchTerm]);
+  const allSetSearchCards = useMemo(() => {
+    if (!normalizeSearchText(searchTerm)) return [];
+
+    return releasedPlayableExpansionEntries.flatMap(([setId, expansion]) =>
+      [...(expansion.commons || []), ...(expansion.uncommons || []), ...(expansion.rares || [])]
+        .filter((card) => cardMatchesSearch(card, searchTerm))
+        .map((card) => ({
+          ...card,
+          setId,
+          setName: expansion.setName,
+          releaseYear: expansion.releaseYear,
+          isOwnedInBinder: Boolean(collection[card.id]),
+        })),
+    );
+  }, [collection, releasedPlayableExpansionEntries, searchTerm]);
   const binderProgress = activeSetCards.length
     ? Math.round((ownedActiveSetCards.length / activeSetCards.length) * 100)
     : 0;
@@ -1629,28 +1738,37 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
     });
   };
 
+  const openSearchResultCard = (card) => {
+    setSelectedCard({
+      ...card,
+      isOwnedInBinder: Boolean(collection[card.id]),
+    });
+  };
+
   const seriesOptions = useMemo(() => {
     const options = [
       'All',
-      ...new Set(expansionEntries.map(([, expansion]) => expansion.series || 'Unknown')),
+      ...new Set(releasedPlayableExpansionEntries.map(([, expansion]) => expansion.series || 'Unknown')),
     ];
     return options.sort((a, b) => {
       if (a === 'All') return -1;
       if (b === 'All') return 1;
       return a.localeCompare(b);
     });
-  }, [expansionEntries]);
+  }, [releasedPlayableExpansionEntries]);
 
   const visibleExpansions = useMemo(
     () =>
-      expansionEntries
-        .filter(([, expansion]) => hasPlayableCards(expansion))
+      releasedPlayableExpansionEntries
         .filter(([, expansion]) => {
           const matchesSeries =
             selectedSeries === 'All' || expansion.series === selectedSeries;
-          const matchesSearch = expansion.setName
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase());
+          const normalizedSearch = normalizeSearchText(searchTerm);
+          const matchesSearch =
+            !normalizedSearch ||
+            normalizeSearchText(expansion.setName).includes(normalizedSearch) ||
+            compactSearchText(expansion.setName).includes(compactSearchText(searchTerm)) ||
+            expansionHasCardMatch(expansion, searchTerm);
 
           return matchesSeries && matchesSearch;
         })
@@ -1664,18 +1782,31 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
           const dateSort = firstDate.localeCompare(secondDate);
           return sortMode === 'release-newest' ? dateSort * -1 : dateSort;
         }),
-    [expansionEntries, selectedSeries, searchTerm, sortMode],
+    [releasedPlayableExpansionEntries, selectedSeries, searchTerm, sortMode],
   );
 
   const chooseSet = (setId) => {
+    const nextSet = allExpansions?.[setId];
+    const hasTopPokemonSearch =
+      normalizeSearchText(searchTerm) && expansionHasCardMatch(nextSet, searchTerm);
+
     clearRevealTimers();
     setSelectedSet(setId);
+    if (normalizeSearchText(searchTerm)) {
+      setBinderSearchTerm(hasTopPokemonSearch ? searchTerm : '');
+    }
     setCurrentPack([]);
     setShowPackModal(false);
     setPackAdded(false);
     setIsPreparingPack(false);
     setIsAutoRevealing(false);
     setSelectedCard(null);
+
+    if (hasTopPokemonSearch) {
+      window.setTimeout(() => {
+        binderPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
   };
 
   return (
@@ -1715,14 +1846,20 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
           ))}
         </div>
 
-        <label htmlFor="set-search">Search expansion sets</label>
+        {latestReleasedExpansion && (
+          <p className="tcg-latest-expansion">
+            Sets available through {latestReleasedExpansion.setName} ({latestReleasedExpansion.releaseYear}).
+          </p>
+        )}
+
+        <label htmlFor="set-search">Search expansions or Pokemon</label>
         <div className="search-with-clear">
           <input
             id="set-search"
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by set name..."
+            placeholder="Try Chaos Rising, Farfetch'd, or Sirfetchd..."
             disabled={loading}
           />
           {searchTerm && (
@@ -1816,7 +1953,49 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
         </div>
       </div>
 
-      <section className="binder-panel" aria-label="Collection binder">
+      {allSetSearchCards.length > 0 && (
+        <section className="binder-panel all-set-results-panel" aria-label="All set search results">
+          <div className="binder-header">
+            <div>
+              <h2>All Sets</h2>
+              <p>
+                {allSetSearchCards.length} card{allSetSearchCards.length === 1 ? '' : 's'} found for {searchTerm}
+              </p>
+            </div>
+          </div>
+          <div className="binder-grid all-set-results-grid">
+            {allSetSearchCards.map((card) => (
+              <article
+                key={`${card.setId}-${card.id}`}
+                className={`binder-card ${collection[card.id] ? 'is-owned' : ''}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => openSearchResultCard(card)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openSearchResultCard(card);
+                  }
+                }}
+              >
+                <img
+                  src={getCardFaceImage(card)}
+                  data-fallback-src={getCardFallbackImage(card)}
+                  alt={card.name}
+                  loading="lazy"
+                  onError={handleCardImageError}
+                />
+                <div>
+                  <h3>{card.name}</h3>
+                  <p>{card.setName}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section ref={binderPanelRef} className="binder-panel" aria-label="Collection binder">
         <div className="binder-header">
           <div>
             <h2>Binder</h2>

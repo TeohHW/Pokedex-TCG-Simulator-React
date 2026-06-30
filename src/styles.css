@@ -630,6 +630,13 @@ button.brand-home-button:focus-visible {
   text-shadow: none;
 }
 
+.tcg-latest-expansion {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .set-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -1200,12 +1207,21 @@ button.brand-home-button:focus-visible {
 
 .binder-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 260px));
+  justify-content: start;
   gap: 22px;
   max-height: 780px;
   overflow: auto;
   padding: 2px;
   scrollbar-color: #111111 #d7d7d7;
+}
+
+.all-set-results-panel {
+  background: #ffffff;
+}
+
+.all-set-results-grid {
+  max-height: 620px;
 }
 
 .binder-card {
