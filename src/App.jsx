@@ -1918,7 +1918,7 @@ function TcgSimulator({ onBack, onOpenPokedex, onOpenWhos, onOpenTeam, onOpenQui
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Try Chaos Rising, Farfetch'd, or Sirfetchd..."
+            placeholder="Try Charizard, Base Set, or Fossil..."
             disabled={loading}
           />
           {searchTerm && (
