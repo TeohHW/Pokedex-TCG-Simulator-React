@@ -59,6 +59,9 @@ const TEN_PACK_FLIP_DELAY = CARD_FLIP_DELAY / 10;
 const CARD_BACK_IMAGE = 'https://images.pokemontcg.io/unbroken-bond/back.png';
 const REPOSITORY_URL = 'https://github.com/TeohHW/Pokemon-TCG-Simulator-React';
 const POKEAPI_BASE_URL = 'https://pokeapi.co/api/v2';
+const POKEAPI_CACHE_DB_NAME = 'pokemon-pack-simulator-pokeapi-cache';
+const POKEAPI_CACHE_STORE_NAME = 'resources';
+const POKEAPI_CACHE_DB_VERSION = 1;
 const POKEDEX_OPTIONS = [
   {
     id: 'kanto',
@@ -376,20 +379,135 @@ const getPokemonOfficialArtworkUrl = (pokemonId) =>
     ? `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemonId}.png`
     : '';
 
-const fetchPokemonListMetadata = (pokemonEntry, options = {}) =>
-  fetch(`${POKEAPI_BASE_URL}/pokemon/${pokemonEntry.pokemonId || normalizePokemonLookup(pokemonEntry.name)}`, options)
-    .then((pokemonResponse) => {
-      if (!pokemonResponse.ok) {
-        throw new Error('Unable to load Pokemon sort data.');
-      }
-      return pokemonResponse.json();
-    })
-    .then((pokemon) =>
-      fetch(pokemon.species.url, options).then((speciesResponse) => {
-        if (!speciesResponse.ok) {
-          throw new Error('Unable to load Pokemon species sort data.');
+const pokeApiMemoryCache = new Map();
+let pokeApiCacheDbPromise = null;
+
+const makeAbortError = () => {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('The operation was aborted.', 'AbortError');
+  }
+
+  const error = new Error('The operation was aborted.');
+  error.name = 'AbortError';
+  return error;
+};
+
+const getPokeApiCacheDb = () => {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return Promise.resolve(null);
+  }
+
+  if (!pokeApiCacheDbPromise) {
+    pokeApiCacheDbPromise = new Promise((resolve) => {
+      const request = window.indexedDB.open(POKEAPI_CACHE_DB_NAME, POKEAPI_CACHE_DB_VERSION);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+
+        if (!db.objectStoreNames.contains(POKEAPI_CACHE_STORE_NAME)) {
+          db.createObjectStore(POKEAPI_CACHE_STORE_NAME, { keyPath: 'url' });
         }
-        return speciesResponse.json().then((species) => ({
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    });
+  }
+
+  return pokeApiCacheDbPromise;
+};
+
+const readCachedPokeApiResource = async (url) => {
+  if (pokeApiMemoryCache.has(url)) {
+    return pokeApiMemoryCache.get(url);
+  }
+
+  const db = await getPokeApiCacheDb();
+  if (!db) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const transaction = db.transaction(POKEAPI_CACHE_STORE_NAME, 'readonly');
+    const store = transaction.objectStore(POKEAPI_CACHE_STORE_NAME);
+    const request = store.get(url);
+
+    request.onsuccess = () => {
+      const data = request.result?.data || null;
+
+      if (data) {
+        pokeApiMemoryCache.set(url, data);
+      }
+
+      resolve(data);
+    };
+    request.onerror = () => resolve(null);
+  });
+};
+
+const writeCachedPokeApiResource = async (url, data) => {
+  pokeApiMemoryCache.set(url, data);
+
+  const db = await getPokeApiCacheDb();
+  if (!db) {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    const transaction = db.transaction(POKEAPI_CACHE_STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(POKEAPI_CACHE_STORE_NAME);
+
+    store.put({
+      url,
+      data,
+      cachedAt: new Date().toISOString(),
+    });
+
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => resolve();
+    transaction.onabort = () => resolve();
+  });
+};
+
+const fetchPokeApiJson = async (url, options = {}, errorMessage = 'Unable to load PokeAPI resource.') => {
+  const cacheKey = String(url);
+
+  if (options.signal?.aborted) {
+    throw makeAbortError();
+  }
+
+  const cachedResource = await readCachedPokeApiResource(cacheKey);
+  if (options.signal?.aborted) {
+    throw makeAbortError();
+  }
+
+  if (cachedResource) {
+    return cachedResource;
+  }
+
+  const response = await fetch(cacheKey, options);
+
+  if (!response.ok) {
+    const error = new Error(errorMessage);
+    error.status = response.status;
+    throw error;
+  }
+
+  const data = await response.json();
+  await writeCachedPokeApiResource(cacheKey, data);
+  return data;
+};
+
+const fetchPokemonListMetadata = (pokemonEntry, options = {}) =>
+  fetchPokeApiJson(
+    `${POKEAPI_BASE_URL}/pokemon/${pokemonEntry.pokemonId || normalizePokemonLookup(pokemonEntry.name)}`,
+    options,
+    'Unable to load Pokemon sort data.',
+  )
+    .then((pokemon) =>
+      fetchPokeApiJson(pokemon.species.url, options, 'Unable to load Pokemon species sort data.')
+        .then((species) => ({
           name: pokemonEntry.name,
           primaryType: pokemon.types[0]?.type?.name || '',
           types: pokemon.types.map(({ type }) => type.name),
@@ -399,8 +517,7 @@ const fetchPokemonListMetadata = (pokemonEntry, options = {}) =>
           stats: Object.fromEntries(
             pokemon.stats.map((stat) => [stat.stat.name, stat.base_stat]),
           ),
-        }));
-      }),
+        })),
     );
 
 const normalizePokemonLookup = (pokemonName = '') =>
@@ -428,19 +545,25 @@ const fetchPokemonByNameOrSpecies = (pokemonName, options = {}) => {
     return Promise.reject(new Error('Pokemon not found. Try a name or National Dex number.'));
   }
 
-  return fetch(`${POKEAPI_BASE_URL}/pokemon/${normalizedName}`, options)
-    .then((response) => {
-      if (response.ok) {
-        return response.json();
+  return fetchPokeApiJson(
+    `${POKEAPI_BASE_URL}/pokemon/${normalizedName}`,
+    options,
+    'Pokemon not found. Try a name or National Dex number.',
+  )
+    .catch((fetchError) => {
+      if (fetchError.name === 'AbortError') {
+        throw fetchError;
       }
 
-      return fetch(`${POKEAPI_BASE_URL}/pokemon-species/${normalizedName}`, options)
-        .then((speciesResponse) => {
-          if (!speciesResponse.ok) {
-            throw new Error('Pokemon not found. Try a name or National Dex number.');
-          }
-          return speciesResponse.json();
-        })
+      if (!fetchError.status) {
+        throw fetchError;
+      }
+
+      return fetchPokeApiJson(
+        `${POKEAPI_BASE_URL}/pokemon-species/${normalizedName}`,
+        options,
+        'Pokemon not found. Try a name or National Dex number.',
+      )
         .then((species) => {
           const defaultVariety =
             species.varieties?.find((variety) => variety.is_default) ||
@@ -450,12 +573,7 @@ const fetchPokemonByNameOrSpecies = (pokemonName, options = {}) => {
             throw new Error('Pokemon species found, but no default form is available.');
           }
 
-          return fetch(defaultVariety.pokemon.url, options).then((pokemonResponse) => {
-            if (!pokemonResponse.ok) {
-              throw new Error('Pokemon form could not be loaded.');
-            }
-            return pokemonResponse.json();
-          });
+          return fetchPokeApiJson(defaultVariety.pokemon.url, options, 'Pokemon form could not be loaded.');
         });
     });
 };
@@ -780,12 +898,8 @@ const getPokemonPool = (selectedDex, pokemonList) =>
 const getPokemonQuizData = (pokemonEntry, options = {}) =>
   fetchPokemonByNameOrSpecies(pokemonEntry.name, options)
     .then((pokemon) =>
-      fetch(pokemon.species.url, options).then((speciesResponse) => {
-        if (!speciesResponse.ok) {
-          throw new Error('Unable to load Pokemon quiz data.');
-        }
-        return speciesResponse.json().then((species) => ({ pokemon, species }));
-      }),
+      fetchPokeApiJson(pokemon.species.url, options, 'Unable to load Pokemon quiz data.')
+        .then((species) => ({ pokemon, species })),
     );
 
 const getEvolutionNames = (node) =>
@@ -805,12 +919,7 @@ const findEvolutionNode = (node, pokemonName, parentName = '') => {
 };
 
 const loadEvolutionChain = (species, options = {}) =>
-  fetch(species.evolution_chain.url, options).then((response) => {
-    if (!response.ok) {
-      throw new Error('Unable to load evolution quiz data.');
-    }
-    return response.json();
-  });
+  fetchPokeApiJson(species.evolution_chain.url, options, 'Unable to load evolution quiz data.');
 
 const getRegionForGeneration = (generationName = '') =>
   ({
@@ -1146,12 +1255,7 @@ const buildPokemonQuizQuestion = async ({
       url: pokemonMove.url,
       level: 1,
     })).slice(0, 60));
-    const moveData = await fetch(move.url).then((response) => {
-      if (!response.ok) {
-        throw new Error('Unable to load move quiz data.');
-      }
-      return response.json();
-    });
+    const moveData = await fetchPokeApiJson(move.url, {}, 'Unable to load move quiz data.');
     const answer = formatPokemonName(moveData.type.name);
 
     return {
@@ -2490,13 +2594,7 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg, onOpenTeam, onO
 
     const controller = new AbortController();
 
-    fetch(currentPokemon.species.url, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Unable to load Pokemon species data.');
-        }
-        return response.json();
-      })
+    fetchPokeApiJson(currentPokemon.species.url, { signal: controller.signal }, 'Unable to load Pokemon species data.')
       .then((data) => {
         setEntrySpecies(data);
       })
@@ -2520,13 +2618,7 @@ function WhosThatPokemonPage({ onBack, onOpenPokedex, onOpenTcg, onOpenTeam, onO
       return Promise.resolve(cachedEntries);
     }
 
-    return fetch(`${POKEAPI_BASE_URL}/pokedex/${regionId}`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Unable to load this Pokedex.');
-        }
-        return response.json();
-      })
+    return fetchPokeApiJson(`${POKEAPI_BASE_URL}/pokedex/${regionId}`, {}, 'Unable to load this Pokedex.')
       .then((data) => {
         const entries = buildPokedexEntries([data], false);
         setEntriesByRegion((previousEntries) => ({
@@ -3733,13 +3825,11 @@ function PokemonTeamPlanner({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOp
 
     Promise.all(
       TYPE_NAMES.map((typeName) =>
-        fetch(`${POKEAPI_BASE_URL}/type/${typeName}`, { signal: controller.signal })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Unable to load Pokemon type chart.');
-            }
-            return response.json();
-          })
+        fetchPokeApiJson(
+          `${POKEAPI_BASE_URL}/type/${typeName}`,
+          { signal: controller.signal },
+          'Unable to load Pokemon type chart.',
+        )
           .then((typeData) => [typeName, typeData]),
       ),
     )
@@ -3765,13 +3855,11 @@ function PokemonTeamPlanner({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOp
 
     Promise.all(
       pokedexIds.map((pokedexId) =>
-        fetch(`${POKEAPI_BASE_URL}/pokedex/${pokedexId}`, { signal: controller.signal })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Unable to load this Pokedex.');
-            }
-            return response.json();
-          }),
+        fetchPokeApiJson(
+          `${POKEAPI_BASE_URL}/pokedex/${pokedexId}`,
+          { signal: controller.signal },
+          'Unable to load this Pokedex.',
+        ),
       ),
     )
       .then((data) => {
@@ -3923,13 +4011,7 @@ function PokemonTeamPlanner({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOp
 
         return Promise.all(
           limitedMoves.map((move) =>
-            fetch(move.url)
-              .then((response) => {
-                if (!response.ok) {
-                  throw new Error('Unable to load move details.');
-                }
-                return response.json();
-              })
+            fetchPokeApiJson(move.url, {}, 'Unable to load move details.')
               .then((moveData) => ({
                 ...move,
                 type: moveData.type.name,
@@ -4302,13 +4384,11 @@ function PokemonQuizStation({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOp
 
     Promise.all(
       TYPE_NAMES.map((typeName) =>
-        fetch(`${POKEAPI_BASE_URL}/type/${typeName}`, { signal: controller.signal })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Unable to load Pokemon quiz type chart.');
-            }
-            return response.json();
-          })
+        fetchPokeApiJson(
+          `${POKEAPI_BASE_URL}/type/${typeName}`,
+          { signal: controller.signal },
+          'Unable to load Pokemon quiz type chart.',
+        )
           .then((typeData) => [typeName, typeData]),
       ),
     )
@@ -4333,13 +4413,11 @@ function PokemonQuizStation({ onBack, onOpenPokedex, onOpenTcg, onOpenWhos, onOp
 
     Promise.all(
       pokedexIds.map((pokedexId) =>
-        fetch(`${POKEAPI_BASE_URL}/pokedex/${pokedexId}`, { signal: controller.signal })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Unable to load quiz Pokedex.');
-            }
-            return response.json();
-          }),
+        fetchPokeApiJson(
+          `${POKEAPI_BASE_URL}/pokedex/${pokedexId}`,
+          { signal: controller.signal },
+          'Unable to load quiz Pokedex.',
+        ),
       ),
     )
       .then((data) => {
@@ -4812,13 +4890,11 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) 
 
     Promise.all(
       pokedexIds.map((pokedexId) =>
-        fetch(`${POKEAPI_BASE_URL}/pokedex/${pokedexId}`, { signal: controller.signal })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Unable to load this Pokedex.');
-            }
-            return response.json();
-          }),
+        fetchPokeApiJson(
+          `${POKEAPI_BASE_URL}/pokedex/${pokedexId}`,
+          { signal: controller.signal },
+          'Unable to load this Pokedex.',
+        ),
       ),
     )
       .then((data) => {
@@ -4929,28 +5005,25 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) 
     const controller = new AbortController();
 
     Promise.all([
-      fetch(selectedPokemon.species.url, { signal: controller.signal }).then((response) => {
-        if (!response.ok) throw new Error('Unable to load Pokemon species data.');
-        return response.json();
-      }),
+      fetchPokeApiJson(
+        selectedPokemon.species.url,
+        { signal: controller.signal },
+        'Unable to load Pokemon species data.',
+      ),
       Promise.all(
         selectedPokemon.types.map(({ type }) =>
-          fetch(type.url, { signal: controller.signal }).then((response) => {
-            if (!response.ok) throw new Error('Unable to load Pokemon type data.');
-            return response.json();
-          }),
+          fetchPokeApiJson(type.url, { signal: controller.signal }, 'Unable to load Pokemon type data.'),
         ),
       ),
     ])
       .then(([species, typeData]) => {
         setSpeciesDetails(species);
         setTypeWeaknesses(getTypeWeaknesses(typeData));
-
-        return fetch(species.evolution_chain.url, { signal: controller.signal });
-      })
-      .then((response) => {
-        if (!response.ok) throw new Error('Unable to load evolution chain.');
-        return response.json();
+        return fetchPokeApiJson(
+          species.evolution_chain.url,
+          { signal: controller.signal },
+          'Unable to load evolution chain.',
+        );
       })
       .then((data) => {
         setEvolutionTree(buildEvolutionTree(data.chain));
@@ -5042,13 +5115,7 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) 
       data: null,
     });
 
-    fetch(ability.url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Unable to load ability details.');
-        }
-        return response.json();
-      })
+    fetchPokeApiJson(ability.url, {}, 'Unable to load ability details.')
       .then((data) => {
         setSelectedPokedexDetail({
           type: 'ability',
@@ -5087,13 +5154,7 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) 
       return;
     }
 
-    fetch(move.url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Unable to load move details.');
-        }
-        return response.json();
-      })
+    fetchPokeApiJson(move.url, {}, 'Unable to load move details.')
       .then((data) => {
         setSelectedPokedexDetail({
           type: 'move',
@@ -5125,13 +5186,11 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) 
         ? Promise.resolve(pokemonList)
         : Promise.all(
             POKEDEX_OPTIONS.map((pokedex) =>
-              fetch(`${POKEAPI_BASE_URL}/pokedex/${pokedex.id}`)
-                .then((response) => {
-                  if (!response.ok) {
-                    throw new Error('Unable to load all Pokedex entries.');
-                  }
-                  return response.json();
-                }),
+              fetchPokeApiJson(
+                `${POKEAPI_BASE_URL}/pokedex/${pokedex.id}`,
+                {},
+                'Unable to load all Pokedex entries.',
+              ),
             ),
           ).then((data) => buildPokedexEntries(data, true));
 
@@ -5261,13 +5320,7 @@ function PokedexPage({ onBack, onOpenTcg, onOpenWhos, onOpenTeam, onOpenQuiz }) 
 
     Promise.all(
       levelUpMoves.map((move) =>
-        fetch(move.url, { signal: controller.signal })
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error('Unable to load move details.');
-            }
-            return response.json();
-          })
+        fetchPokeApiJson(move.url, { signal: controller.signal }, 'Unable to load move details.')
           .then((data) => [move.name, data]),
       ),
     )
